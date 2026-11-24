@@ -57,10 +57,13 @@ Si no pasas `aliases`, regístralos en caliente con `bus_alias`. Para obtener lo
 | `bus_read` | Leer mensajes ya entregados en una sesión (bajo demanda) |
 | `bus_directory` | Listar alias y sesiones del proyecto |
 | `bus_alias` | Registrar alias → session ID (persistente) |
+| `bus_status` | Healthcheck: activo, alias, contadores y configuración |
 | `bus_audit` | Ver entregas capturadas por el plugin |
 
-También registra el skill `agent-bus`, el comando `/bus-help` y unas reglas inyectadas en el
-contexto de cada sesión.
+También registra el skill `agent-bus` (`autoinvoke: false`, se carga con `@agent-bus`), el comando
+`/bus-help` y **una sola** inyección de reglas en el contexto de cada sesión. No dupliques el
+protocolo en los skills del proyecto: el plugin es la fuente de transporte y el archivo de
+decisiones del repo es la fuente de los acuerdos.
 
 ## Mensaje
 

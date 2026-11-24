@@ -27,7 +27,7 @@ const DEFAULTS: Required<Omit<BusOptions, "aliases">> = {
   toolNamespace: "bus",
 };
 
-const RULES = `AGENT BUS (plugin opencode-agentbus): para hablar con otros agentes usa las herramientas bus_* (no reenvíes prompts por el humano). Todo mensaje lleva sobre [FROM … → TO … | ID | TYPE | REPLY-TO | SUPERSEDES]. Un mensaje = un asunto. Confirma con REPORT + replyTo. Mal enrutado → CORRECCIÓN con supersedes y steer. ${ANTI_POLLING_RULE} El prompt inyectado despierta a la sesión: si no hay trabajo, quédate inactivo; no escribas estados periódicos de "monitorización". No cambies modelos por rate limit sin permiso. El API es transporte; el archivo de decisiones del repo es la fuente de verdad.`;
+const RULES = `AGENT BUS (plugin opencode-agentbus) — SOLO transporte; la fuente de verdad es el archivo de decisiones del proyecto. Usa bus_* para hablar con otros agentes (no reenvíes prompts por el humano). Sobre: [FROM … → TO … | ID | TYPE | REPLY-TO | SUPERSEDES]. Un mensaje = un asunto; confirma con REPORT + replyTo; mal enrutado → CORRECCIÓN con supersedes y steer. ${ANTI_POLLING_RULE} No cambies modelos por rate limit sin permiso.`;
 
 function asOptions(raw: unknown): BusOptions {
   return (raw && typeof raw === "object" ? raw : {}) as BusOptions;
@@ -43,6 +43,19 @@ export default Plugin.define({
     const options = { ...DEFAULTS, ...asOptions(ctx.options) };
     const stored = (await ctx.storage.get("aliases")) as Record<string, string> | undefined;
     let aliases: Record<string, string> = { ...(stored ?? {}), ...(options.aliases ?? {}) };
+
+    const bump = async (key: string): Promise<number> => {
+      const current = (await ctx.storage.get(key)) as number | undefined;
+      const next = (typeof current === "number" ? current : 0) + 1;
+      await ctx.storage.set(key, next);
+      return next;
+    };
+
+    console.log(
+      `[agentbus] setup id=agentbus aliases=${Object.keys(aliases).length} ` +
+        `delivery=${options.defaultDelivery} skill=${options.registerSkill} ` +
+        `audit=${options.audit} dir=${ctx.location.directory}`,
+    );
 
     const resolve = (target: string): string | undefined => {
       if (isSessionID(target)) return target;
@@ -121,6 +134,7 @@ export default Plugin.define({
             delivery,
             at: new Date().toISOString(),
           });
+          await bump("stats/sent");
           return { content: `enviado ${msg.id} → ${args.to} (${args.type}, ${delivery})` };
         },
       });
@@ -177,6 +191,7 @@ export default Plugin.define({
             }
           }
           const limit = args.limit ?? 8;
+          await bump("stats/read");
           return {
             content: headers.length
               ? headers.slice(-limit).join("\n")
@@ -203,6 +218,33 @@ export default Plugin.define({
           aliases = { ...aliases, [args.alias]: args.sessionID };
           await ctx.storage.set("aliases", aliases);
           return { content: `alias ${args.alias} → ${args.sessionID} guardado` };
+        },
+      });
+
+      editor.add({
+        name: "status",
+        description:
+          "Healthcheck del plugin: versión, alias, contadores enviados/entregados/lecturas y configuración activa.",
+        input: { type: "object", properties: {}, additionalProperties: false },
+        options: { namespace: options.toolNamespace, codemode: true },
+        execute: async () => {
+          const read = async (key: string): Promise<number> => {
+            const value = await ctx.storage.get(key);
+            return typeof value === "number" ? value : 0;
+          };
+          const lines = [
+            "agentbus 0.1.0 — ACTIVO",
+            `directorio: ${ctx.location.directory}`,
+            `alias (${Object.keys(aliases).length}): ${Object.keys(aliases).join(", ") || "-"}`,
+            `delivery por defecto: ${options.defaultDelivery}`,
+            `enviados: ${await read("stats/sent")}`,
+            `entregados (evento): ${await read("stats/delivered")}`,
+            `lecturas bus_read: ${await read("stats/read")}`,
+            `hooks: context=${options.injectInstructions} prompt=${options.requireEnvelope}`,
+            `skill=${options.registerSkill} commands=${options.registerCommands} audit=${options.audit}`,
+            "regla anti-polling: activa (ver PROTOCOL.md)",
+          ];
+          return { content: lines.join("\n") };
         },
       });
 
@@ -238,7 +280,8 @@ export default Plugin.define({
           description: "Protocolo de comunicación asíncrona entre sesiones de OpenCode",
           path: Skill.Info.fields.path.make(path),
           content: RULES,
-          autoinvoke: true,
+          // El context hook ya inyecta las reglas esenciales: evitar duplicarlas.
+          autoinvoke: false,
         });
       });
     }
@@ -297,6 +340,7 @@ export default Plugin.define({
                 at: new Date().toISOString(),
               },
             );
+            await bump("stats/delivered");
           } catch {
             // La auditoría nunca debe romper el flujo de mensajería.
           }
