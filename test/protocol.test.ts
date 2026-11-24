@@ -1,0 +1,49 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { ANTI_POLLING_RULE, envelope, isBusMessage, parseHeader } from "../src/protocol.ts";
+
+test("envelope lleva FROM/TO/TYPE/ID y firma", () => {
+  const msg = envelope({
+    from: "lead",
+    to: "beam",
+    type: "DECISION",
+    subject: "G0 cerrado",
+    body: "Verificado",
+    id: "MSG-1-1",
+    now: new Date("2026-11-24T10:00:00Z"),
+  });
+  assert.equal(msg.id, "MSG-1-1");
+  assert.match(
+    msg.header,
+    /^\[FROM @lead \| TO @beam \| .* \| ID MSG-1-1 \| TYPE DECISION\]$/,
+  );
+  assert.match(msg.text, /^\[FROM @lead/);
+  assert.match(msg.text, /G0 cerrado/);
+  assert.match(msg.text, /— @lead$/);
+  assert.equal(isBusMessage(msg.text), true);
+  assert.equal(parseHeader(msg.text), msg.header);
+});
+
+test("REPLY-TO y SUPERSEDES se incluyen cuando se aportan", () => {
+  const msg = envelope({
+    from: "hy4",
+    to: "lead",
+    type: "CORRECCIÓN",
+    subject: "Mal enrutado",
+    body: "Ignora el anterior",
+    replyTo: "MSG-1-1",
+    supersedes: "MSG-1-2",
+  });
+  assert.match(msg.header, /REPLY-TO MSG-1-1/);
+  assert.match(msg.header, /SUPERSEDES MSG-1-2/);
+});
+
+test("texto normal no se confunde con mensaje del bus", () => {
+  assert.equal(isBusMessage("Hola, ¿qué tal?"), false);
+  assert.equal(parseHeader("Hola"), undefined);
+});
+
+test("la regla anti-polling prohíbe bucles de monitorización", () => {
+  assert.match(ANTI_POLLING_RULE, /NO hagas polling/i);
+  assert.match(ANTI_POLLING_RULE, /monitorización/i);
+});

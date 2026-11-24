@@ -1,0 +1,26 @@
+{
+  "name": "opencode-agentbus",
+  "version": "0.1.0",
+  "description": "Portable agent-to-agent messaging protocol for OpenCode V2 sessions",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "PROTOCOL.md",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.4.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
