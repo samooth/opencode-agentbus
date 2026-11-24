@@ -125,7 +125,9 @@ export default Plugin.define({
             supersedes: args.supersedes,
           });
           const delivery: Delivery = args.steer ? "steer" : options.defaultDelivery;
-          await ctx.session.prompt({ sessionID, text: msg.text, delivery });
+          // resume:true evita que un mensaje en cola se quede dormido en el inbox de una
+          // sesión inactiva: la entrega se hace y la sesión se despierta.
+          await ctx.session.prompt({ sessionID, text: msg.text, delivery, resume: true });
           await ctx.storage.set(`sent/${msg.id}`, {
             to: args.to,
             from,
