@@ -27,8 +27,15 @@ export interface Envelope {
   header: string;
 }
 
+let sequence = 0;
+
+/** ID único incluso si se envían varios mensajes en el mismo segundo/proceso. */
 export function makeId(now: Date = new Date()): string {
-  return `MSG-${Math.floor(now.getTime() / 1000)}-${process.pid}`;
+  sequence += 1;
+  return (
+    `MSG-${Math.floor(now.getTime() / 1000)}-${process.pid}` +
+    `-${sequence.toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+  );
 }
 
 /** Construye el sobre `[FROM … → TO … | …]`, el cuerpo y la firma final. */

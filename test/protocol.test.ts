@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ANTI_POLLING_RULE, envelope, isBusMessage, parseHeader } from "../src/protocol.ts";
+import { ANTI_POLLING_RULE, envelope, isBusMessage, makeId, parseHeader } from "../src/protocol.ts";
 
 test("envelope lleva FROM/TO/TYPE/ID y firma", () => {
   const msg = envelope({
@@ -36,6 +36,15 @@ test("REPLY-TO y SUPERSEDES se incluyen cuando se aportan", () => {
   });
   assert.match(msg.header, /REPLY-TO MSG-1-1/);
   assert.match(msg.header, /SUPERSEDES MSG-1-2/);
+});
+
+test("los IDs generados son únicos aunque caigan en el mismo segundo", () => {
+  const a = makeId(new Date("2026-11-24T10:00:00Z"));
+  const b = makeId(new Date("2026-11-24T10:00:00Z"));
+  const c = makeId();
+  assert.notEqual(a, b);
+  assert.notEqual(a, c);
+  assert.notEqual(b, c);
 });
 
 test("texto normal no se confunde con mensaje del bus", () => {
