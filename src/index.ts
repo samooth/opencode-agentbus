@@ -335,9 +335,10 @@ export default Plugin.define({
             await ctx.storage.set(
               `delivered/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               {
+                at: new Date().toISOString(),
                 sessionID: typeof raw.sessionID === "string" ? raw.sessionID : null,
                 inboxID: typeof raw.inboxID === "string" ? raw.inboxID : null,
-                at: new Date().toISOString(),
+                raw: JSON.stringify(raw),
               },
             );
             await bump("stats/delivered");
