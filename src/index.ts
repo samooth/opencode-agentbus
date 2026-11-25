@@ -331,6 +331,43 @@ export default Plugin.define({
       });
 
       editor.add({
+        name: "setup",
+        description:
+          "Registra un alias de la lista mostrada por /bus-wizard: índice, alias y rol",
+        input: {
+          type: "object",
+          properties: {
+            index: { type: "number", description: "Número de la sesión en /bus-wizard" },
+            alias: { type: "string" },
+            role: { type: "string", description: "lead | dev | reviewer" },
+          },
+          required: ["index", "alias", "role"],
+          additionalProperties: false,
+        },
+        options: { namespace: options.toolNamespace, codemode: true },
+        execute: async (input) => {
+          const args = input as { index: number; alias: string; role: string };
+          const cached = (await ctx.storage.get(sk("wizard/sessions"))) as
+            | Array<{ index: number; id: string; title: string }>
+            | undefined;
+          const chosen = cached?.find((s) => s.index === args.index);
+          if (!chosen) {
+            return {
+              content: "Ese número no está en la lista. Ejecuta /bus-wizard para verla.",
+              metadata: { error: "bad_index" },
+            };
+          }
+          aliases = { ...aliases, [args.alias]: chosen.id };
+          roles = { ...roles, [args.alias]: args.role };
+          await ctx.storage.set(sk("aliases"), aliases);
+          await ctx.storage.set(sk("roles"), roles);
+          return {
+            content: `${args.alias} (${args.role}) → ${chosen.title} · ${chosen.id} guardado`,
+          };
+        },
+      });
+
+      editor.add({
         name: "inbox",
         description:
           "Lista mensajes enviados y aún no entregados (bajo demanda). No sondea el buzón en bucle.",
@@ -460,20 +497,29 @@ export default Plugin.define({
               directory: ctx.location.directory,
               limit: 100,
             });
-            const sessions = (page.data ?? []).map((s) => {
+            const sessions = (page.data ?? []).map((s, i) => {
               const item = s as { id: string; title?: string };
-              return `- \`${item.id}\` · ${item.title ?? "(sin título)"}`;
+              return {
+                index: i + 1,
+                id: item.id,
+                title: item.title ?? "(sin título)",
+              };
             });
+            await ctx.storage.set(sk("wizard/sessions"), sessions);
             await ctx.session.prompt({
               sessionID,
               text: [
                 "# Asistente de Agent Bus",
                 "",
-                "Elige una sesión de la lista y dime: **alias**, **rol** (`lead`, `dev` o `reviewer`) y el ID de sesión.",
-                "Yo registrar el alias con `bus.alias`. Repite para cada agente y luego usa `/bus-report` para verificar.",
+                "**Tú eliges.** Elige un número de la lista y responde en este mismo chat con:",
+                "",
+                "`número  alias  rol`   (rol = `lead`, `dev` o `reviewer`)",
+                "",
+                "Ejemplo: `1 lead lead`. Repite para cada agente; yo registro los alias con `bus.setup`.",
+                "Cuando termines, usa `/bus-report` para verificar.",
                 "",
                 "## Sesiones del proyecto",
-                ...sessions,
+                ...sessions.map((s) => `${s.index}. ${s.title} · \`${s.id}\``),
                 "",
                 "## Configuración actual",
                 await reportText("md"),

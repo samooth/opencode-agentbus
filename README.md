@@ -75,6 +75,11 @@ La parte TUI (`./tui`) añade dos entradas en la paleta y como slash commands:
   guarda los alias y roles de forma persistente.
 - **`/bus-audit`** — muestra las últimas entregas con fecha, sesión e `inboxID`, sin bucles ni sondeo.
 
+**`/bus-wizard`** muestra la lista numerada de sesiones del proyecto. La persona elige escribiendo
+en el chat `número alias rol` (por ejemplo `1 lead lead`); el plugin registra el alias con
+`bus.setup`. El asistente visual TUI queda como opcional: si no se detecta en la instalación, este
+flujo conversacional cubre la misma función.
+
 En cualquier sesión, **`/bus-report`** escribe un informe Markdown legible con alias, roles,
 contadores y entregas recientes. Para herramientas externas, el plugin expone un RPC con
 `overview`, `setAlias`, `audit` y `report`:
