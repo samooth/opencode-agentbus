@@ -61,10 +61,31 @@ Si no pasas `aliases`, regístralos en caliente con `bus_alias`. Para obtener lo
 | `bus_status` | Healthcheck: activo, alias, contadores, pendientes y configuración |
 | `bus_audit` | Ver entregas capturadas por el plugin |
 
-También registra el skill `agent-bus` (`autoinvoke: false`, se carga con `@agent-bus`), el comando
-`/bus-help` y **una sola** inyección de reglas en el contexto de cada sesión. No dupliques el
-protocolo en los skills del proyecto: el plugin es la fuente de transporte y el archivo de
-decisiones del repo es la fuente de los acuerdos.
+También registra el skill `agent-bus` (`autoinvoke: false`, se carga con `@agent-bus`), los comandos
+`/bus-help` y `/bus-report`, y **una sola** inyección de reglas en el contexto de cada sesión. No
+dupliques el protocolo en los skills del proyecto: el plugin es la fuente de transporte y el archivo
+de decisiones del repo es la fuente de los acuerdos.
+
+## Interfaz para la persona
+
+La parte TUI (`./tui`) añade dos entradas en la paleta y como slash commands:
+
+- **`/bus-setup`** — asistente guiado: lista las sesiones del proyecto, permite elegir una, darle un
+  alias y asignar un rol (`lead`, `dev` o `reviewer`). Repite el paso las veces que haga falta y
+  guarda los alias y roles de forma persistente.
+- **`/bus-audit`** — muestra las últimas entregas con fecha, sesión e `inboxID`, sin bucles ni sondeo.
+
+En cualquier sesión, **`/bus-report`** escribe un informe Markdown legible con alias, roles,
+contadores y entregas recientes. Para herramientas externas, el plugin expone un RPC con
+`overview`, `setAlias`, `audit` y `report`:
+
+```bash
+opencode api post '/api/rpc/agentbus/report?location[directory]=/ruta/del/proyecto' \
+  --data '{"input":{"format":"md"}}'
+```
+
+Los roles son información para la persona y los clientes; el transporte sigue siendo el sobre del
+protocolo y no cambia la propiedad de archivos ni los gates.
 
 ## Mensaje
 

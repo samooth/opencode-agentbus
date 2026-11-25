@@ -1,4 +1,5 @@
 import { Plugin, Skill } from "@opencode/plugin";
+import { AgentBus } from "./rpc.js";
 import { fileURLToPath } from "node:url";
 import {
   ANTI_POLLING_RULE,
@@ -57,7 +58,69 @@ export default Plugin.define({
     const options = { ...DEFAULTS, ...asOptions(ctx.options) };
     const stored = (await ctx.storage.get("aliases")) as Record<string, string> | undefined;
     let aliases: Record<string, string> = { ...(stored ?? {}), ...(options.aliases ?? {}) };
+    const storedRoles = (await ctx.storage.get("roles")) as Record<string, string> | undefined;
+    let roles: Record<string, string> = { ...(storedRoles ?? {}) };
     const pending = new Map<string, PendingMessage>();
+
+    const read = async (key: string): Promise<number> => {
+      const value = await ctx.storage.get(key);
+      return typeof value === "number" ? value : 0;
+    };
+
+    const auditEntries = async (limit: number) => {
+      const page = await ctx.storage.scan({ prefix: "delivered/", limit: 200 });
+      return sortAuditEntries(page.entries, limit).map((entry) => {
+        const value =
+          entry.value && typeof entry.value === "object"
+            ? (entry.value as Record<string, unknown>)
+            : {};
+        return {
+          key: String(entry.key),
+          at: typeof value.at === "string" ? value.at : "",
+          sessionID: typeof value.sessionID === "string" ? value.sessionID : "",
+          inboxID: typeof value.inboxID === "string" ? value.inboxID : "",
+          subject: typeof value.subject === "string" ? value.subject : "",
+        };
+      });
+    };
+
+    const reportText = async (format: "md" | "json"): Promise<string> => {
+      const data = {
+        project: ctx.location.directory,
+        schemaHash: "agentbus-0.1.0",
+        aliases: Object.entries(aliases).map(([alias, id]) => ({
+          alias,
+          sessionID: id,
+          role: roles[alias] ?? "dev",
+        })),
+        counters: {
+          sent: await read("stats/sent"),
+          delivered: await read("stats/delivered"),
+          reads: await read("stats/read"),
+          pending: pending.size,
+        },
+        audit: await auditEntries(20),
+      };
+      if (format === "json") return JSON.stringify(data, null, 2);
+      const lines = [
+        "# Informe de Agent Bus",
+        "",
+        `Proyecto: \`${data.project}\``,
+        "",
+        "## Alias y roles",
+        ...data.aliases.map((a) => `- **${a.alias}** (${a.role}) → \`${a.sessionID}\``),
+        "",
+        "## Contadores",
+        `- enviados: ${data.counters.sent}`,
+        `- entregados: ${data.counters.delivered}`,
+        `- lecturas: ${data.counters.reads}`,
+        `- pendientes: ${data.counters.pending}`,
+        "",
+        "## Últimas entregas",
+        ...data.audit.map((a) => `- \`${a.at}\` · ${a.sessionID || "-"} · ${a.inboxID || "-"}`),
+      ];
+      return lines.join("\n");
+    };
 
     const bump = async (key: string): Promise<number> => {
       const current = (await ctx.storage.get(key)) as number | undefined;
@@ -247,16 +310,21 @@ export default Plugin.define({
           properties: {
             alias: { type: "string" },
             sessionID: { type: "string" },
+            role: { type: "string", description: "lead | dev | reviewer (default: dev)" },
           },
           required: ["alias", "sessionID"],
           additionalProperties: false,
         },
         options: { namespace: options.toolNamespace, codemode: true },
         execute: async (input) => {
-          const args = input as { alias: string; sessionID: string };
+          const args = input as { alias: string; sessionID: string; role?: string };
           aliases = { ...aliases, [args.alias]: args.sessionID };
+          roles = { ...roles, [args.alias]: args.role ?? "dev" };
           await ctx.storage.set("aliases", aliases);
-          return { content: `alias ${args.alias} → ${args.sessionID} guardado` };
+          await ctx.storage.set("roles", roles);
+          return {
+            content: `alias ${args.alias} (${args.role ?? "dev"}) → ${args.sessionID} guardado`,
+          };
         },
       });
 
@@ -314,12 +382,11 @@ export default Plugin.define({
         options: { namespace: options.toolNamespace, codemode: true },
         execute: async (input) => {
           const limit = (input as { limit?: number }).limit ?? 10;
-          const page = await ctx.storage.scan({ prefix: "delivered/", limit: 200 });
-          const sorted = sortAuditEntries(page.entries, limit);
+          const entries = await auditEntries(limit);
           return {
-            content: sorted.length
-              ? sorted
-                  .map((entry) => `${entry.key}: ${JSON.stringify(entry.value)}`)
+            content: entries.length
+              ? entries
+                  .map((e) => `${e.at} · sesión ${e.sessionID || "-"} · inbox ${e.inboxID || "-"}`)
                   .join("\n")
               : "(sin entregas registradas)",
           };
@@ -376,8 +443,70 @@ export default Plugin.define({
             });
           },
         });
+        editor.add({
+          name: "bus-report",
+          description: "Escribe en la sesión un informe legible de aliases, contadores y auditoría",
+          execute: async ({ sessionID, delivery }) => {
+            await ctx.session.prompt({
+              sessionID,
+              text: await reportText("md"),
+              delivery,
+            });
+          },
+        });
       });
     }
+
+    const rpcRegistration = await ctx.rpc.register(AgentBus, {
+      overview: async () => {
+        const page = await ctx.session.list({
+          directory: ctx.location.directory,
+          limit: 100,
+        });
+        return {
+          directory: ctx.location.directory,
+          delivery: options.defaultDelivery,
+          self: options.self,
+          aliases: Object.entries(aliases).map(([alias, id]) => ({
+            alias,
+            sessionID: id,
+            role: roles[alias] ?? "dev",
+          })),
+          sessions: (page.data ?? []).map((session) => ({
+            id: String((session as { id: string }).id),
+            title: String((session as { title?: string }).title ?? ""),
+          })),
+          counters: {
+            sent: await read("stats/sent"),
+            delivered: await read("stats/delivered"),
+            reads: await read("stats/read"),
+            pending: pending.size,
+          },
+        };
+      },
+      setAlias: async (input, context) => {
+        const args = input as { alias: string; sessionID: string; role: string };
+        if (!args.sessionID.startsWith("ses_")) {
+          throw new Error("El sessionID debe empezar por ses_");
+        }
+        aliases = { ...aliases, [args.alias]: args.sessionID };
+        roles = { ...roles, [args.alias]: args.role || "dev" };
+        await ctx.storage.set("aliases", aliases);
+        await ctx.storage.set("roles", roles);
+        await rpcRegistration.events.emit("changed", { kind: "alias" });
+        return { ok: true };
+      },
+      audit: async (input) => {
+        const limit = typeof (input as { limit?: unknown })?.limit === "number"
+          ? Number((input as { limit: number }).limit)
+          : 10;
+        return { entries: await auditEntries(limit) };
+      },
+      report: async (input) => {
+        const format = (input as { format?: string })?.format === "json" ? "json" : "md";
+        return { text: await reportText(format) };
+      },
+    });
 
     const controller = new AbortController();
     if (options.audit) {
@@ -414,7 +543,10 @@ export default Plugin.define({
       })();
     }
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      void rpcRegistration.dispose();
+    };
   },
 });
 
