@@ -56,19 +56,21 @@ export default Plugin.define({
   id: "agentbus",
   async setup(ctx) {
     const options = { ...DEFAULTS, ...asOptions(ctx.options) };
-    const stored = (await ctx.storage.get("aliases")) as Record<string, string> | undefined;
+    const projectKey = ctx.location.directory.replace(/[^A-Za-z0-9]/g, "_").slice(-80) || "root";
+    const sk = (key: string): string => `${projectKey}/${key}`;
+    const stored = (await ctx.storage.get(sk("aliases"))) as Record<string, string> | undefined;
     let aliases: Record<string, string> = { ...(stored ?? {}), ...(options.aliases ?? {}) };
-    const storedRoles = (await ctx.storage.get("roles")) as Record<string, string> | undefined;
+    const storedRoles = (await ctx.storage.get(sk("roles"))) as Record<string, string> | undefined;
     let roles: Record<string, string> = { ...(storedRoles ?? {}) };
     const pending = new Map<string, PendingMessage>();
 
     const read = async (key: string): Promise<number> => {
-      const value = await ctx.storage.get(key);
+      const value = await ctx.storage.get(sk(key));
       return typeof value === "number" ? value : 0;
     };
 
     const auditEntries = async (limit: number) => {
-      const page = await ctx.storage.scan({ prefix: "delivered/", limit: 200 });
+      const page = await ctx.storage.scan({ prefix: sk("delivered/"), limit: 200 });
       return sortAuditEntries(page.entries, limit).map((entry) => {
         const value =
           entry.value && typeof entry.value === "object"
@@ -123,9 +125,9 @@ export default Plugin.define({
     };
 
     const bump = async (key: string): Promise<number> => {
-      const current = (await ctx.storage.get(key)) as number | undefined;
+      const current = (await ctx.storage.get(sk(key))) as number | undefined;
       const next = (typeof current === "number" ? current : 0) + 1;
-      await ctx.storage.set(key, next);
+      await ctx.storage.set(sk(key), next);
       return next;
     };
 
@@ -223,7 +225,7 @@ export default Plugin.define({
             inboxID,
             at,
           });
-          await ctx.storage.set(`sent/${msg.id}`, {
+          await ctx.storage.set(sk(`sent/${msg.id}`), {
             to: args.to,
             from,
             type: args.type,
@@ -320,8 +322,8 @@ export default Plugin.define({
           const args = input as { alias: string; sessionID: string; role?: string };
           aliases = { ...aliases, [args.alias]: args.sessionID };
           roles = { ...roles, [args.alias]: args.role ?? "dev" };
-          await ctx.storage.set("aliases", aliases);
-          await ctx.storage.set("roles", roles);
+          await ctx.storage.set(sk("aliases"), aliases);
+          await ctx.storage.set(sk("roles"), roles);
           return {
             content: `alias ${args.alias} (${args.role ?? "dev"}) → ${args.sessionID} guardado`,
           };
@@ -350,10 +352,6 @@ export default Plugin.define({
         input: { type: "object", properties: {}, additionalProperties: false },
         options: { namespace: options.toolNamespace, codemode: true },
         execute: async () => {
-          const read = async (key: string): Promise<number> => {
-            const value = await ctx.storage.get(key);
-            return typeof value === "number" ? value : 0;
-          };
           const lines = [
             "agentbus 0.1.0 — ACTIVO",
             `directorio: ${ctx.location.directory}`,
@@ -521,8 +519,8 @@ export default Plugin.define({
         }
         aliases = { ...aliases, [args.alias]: args.sessionID };
         roles = { ...roles, [args.alias]: args.role || "dev" };
-        await ctx.storage.set("aliases", aliases);
-        await ctx.storage.set("roles", roles);
+        await ctx.storage.set(sk("aliases"), aliases);
+        await ctx.storage.set(sk("roles"), roles);
         await rpcRegistration.events.emit("changed", { kind: "alias" });
         return { ok: true };
       },
@@ -557,7 +555,7 @@ export default Plugin.define({
             }
             if (event.type !== "session.inbox.delivered") continue;
             await ctx.storage.set(
-              `delivered/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              sk(`delivered/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
               {
                 at: new Date().toISOString(),
                 sessionID: typeof raw.sessionID === "string" ? raw.sessionID : null,
