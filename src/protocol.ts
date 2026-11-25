@@ -73,6 +73,28 @@ export function isBusMessage(text: string): boolean {
   return parseHeader(text) !== undefined;
 }
 
+/** Entrada de auditoría con fecha ISO y clave estable. */
+export interface AuditEntry {
+  key: string;
+  value: unknown;
+}
+
+function auditTime(value: unknown): string {
+  if (value && typeof value === "object" && "at" in value) {
+    const at = (value as { at?: unknown }).at;
+    if (typeof at === "string") return at;
+  }
+  return "";
+}
+
+/** Ordena entregas por fecha descendiente y aplica un límite acotado. */
+export function sortAuditEntries<T extends AuditEntry>(entries: readonly T[], limit = 10): T[] {
+  const size = Math.max(1, Math.min(100, Math.floor(limit)));
+  return [...entries]
+    .sort((a, b) => auditTime(b.value).localeCompare(auditTime(a.value)))
+    .slice(0, size);
+}
+
 /**
  * Regla anti-ruido: con inyección directa el prompt despierta a la sesión.
  * No sondee el buzón en bucle ni escriba entradas de "monitorización" periódicas.

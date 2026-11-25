@@ -1,6 +1,20 @@
 import { Plugin, Skill } from "@opencode/plugin";
 import { fileURLToPath } from "node:url";
-import { ANTI_POLLING_RULE, envelope, isBusMessage, parseHeader } from "./protocol.js";
+import {
+  ANTI_POLLING_RULE,
+  envelope,
+  isBusMessage,
+  parseHeader,
+  sortAuditEntries,
+} from "./protocol.js";
+
+interface PendingMessage {
+  id: string;
+  to: string;
+  subject: string;
+  inboxID?: string;
+  at: string;
+}
 
 type Delivery = "queue" | "steer";
 
@@ -43,6 +57,7 @@ export default Plugin.define({
     const options = { ...DEFAULTS, ...asOptions(ctx.options) };
     const stored = (await ctx.storage.get("aliases")) as Record<string, string> | undefined;
     let aliases: Record<string, string> = { ...(stored ?? {}), ...(options.aliases ?? {}) };
+    const pending = new Map<string, PendingMessage>();
 
     const bump = async (key: string): Promise<number> => {
       const current = (await ctx.storage.get(key)) as number | undefined;
@@ -127,17 +142,39 @@ export default Plugin.define({
           const delivery: Delivery = args.steer ? "steer" : options.defaultDelivery;
           // resume:true evita que un mensaje en cola se quede dormido en el inbox de una
           // sesión inactiva: la entrega se hace y la sesión se despierta.
-          await ctx.session.prompt({ sessionID, text: msg.text, delivery, resume: true });
+          const admission = await ctx.session.prompt({
+            sessionID,
+            text: msg.text,
+            delivery,
+            resume: true,
+          });
+          const inboxID =
+            typeof (admission as { id?: unknown })?.id === "string"
+              ? (admission as { id: string }).id
+              : undefined;
+          const at = new Date().toISOString();
+          pending.set(inboxID ?? msg.id, {
+            id: msg.id,
+            to: args.to,
+            subject: args.subject,
+            inboxID,
+            at,
+          });
           await ctx.storage.set(`sent/${msg.id}`, {
             to: args.to,
             from,
             type: args.type,
             subject: args.subject,
             delivery,
-            at: new Date().toISOString(),
+            inboxID: inboxID ?? null,
+            at,
           });
           await bump("stats/sent");
-          return { content: `enviado ${msg.id} → ${args.to} (${args.type}, ${delivery})` };
+          return {
+            content:
+              `enviado ${msg.id} → ${args.to} (${args.type}, ${delivery})` +
+              (inboxID ? ` · inbox ${inboxID}` : ""),
+          };
         },
       });
 
@@ -224,6 +261,21 @@ export default Plugin.define({
       });
 
       editor.add({
+        name: "inbox",
+        description:
+          "Lista mensajes enviados y aún no entregados (bajo demanda). No sondea el buzón en bucle.",
+        input: { type: "object", properties: {}, additionalProperties: false },
+        options: { namespace: options.toolNamespace, codemode: true },
+        execute: async () => {
+          if (pending.size === 0) return { content: "(sin mensajes pendientes)" };
+          const lines = [...pending.values()]
+            .sort((a, b) => a.at.localeCompare(b.at))
+            .map((p) => `  ${p.id} → ${p.to} · ${p.subject}${p.inboxID ? ` · inbox ${p.inboxID}` : ""}`);
+          return { content: `Pendientes (${pending.size}):\n${lines.join("\n")}` };
+        },
+      });
+
+      editor.add({
         name: "status",
         description:
           "Healthcheck del plugin: versión, alias, contadores enviados/entregados/lecturas y configuración activa.",
@@ -242,6 +294,7 @@ export default Plugin.define({
             `enviados: ${await read("stats/sent")}`,
             `entregados (evento): ${await read("stats/delivered")}`,
             `lecturas bus_read: ${await read("stats/read")}`,
+            `pendientes de entrega: ${pending.size}`,
             `hooks: context=${options.injectInstructions} prompt=${options.requireEnvelope}`,
             `skill=${options.registerSkill} commands=${options.registerCommands} audit=${options.audit}`,
             "regla anti-polling: activa (ver PROTOCOL.md)",
@@ -261,10 +314,11 @@ export default Plugin.define({
         options: { namespace: options.toolNamespace, codemode: true },
         execute: async (input) => {
           const limit = (input as { limit?: number }).limit ?? 10;
-          const page = await ctx.storage.scan({ prefix: "delivered/", limit });
+          const page = await ctx.storage.scan({ prefix: "delivered/", limit: 200 });
+          const sorted = sortAuditEntries(page.entries, limit);
           return {
-            content: page.entries.length
-              ? page.entries
+            content: sorted.length
+              ? sorted
                   .map((entry) => `${entry.key}: ${JSON.stringify(entry.value)}`)
                   .join("\n")
               : "(sin entregas registradas)",
@@ -329,17 +383,26 @@ export default Plugin.define({
     if (options.audit) {
       void (async () => {
         for await (const event of ctx.event.subscribe({
-          types: ["session.inbox.delivered"],
+          types: [
+            "session.inbox.enqueued",
+            "session.inbox.delivered",
+            "session.inbox.cancelled",
+          ],
           signal: controller.signal,
         })) {
           try {
             const raw = event as unknown as Record<string, unknown>;
+            const inboxID = typeof raw.inboxID === "string" ? raw.inboxID : null;
+            if (event.type === "session.inbox.delivered" || event.type === "session.inbox.cancelled") {
+              if (inboxID) pending.delete(inboxID);
+            }
+            if (event.type !== "session.inbox.delivered") continue;
             await ctx.storage.set(
               `delivered/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               {
                 at: new Date().toISOString(),
                 sessionID: typeof raw.sessionID === "string" ? raw.sessionID : null,
-                inboxID: typeof raw.inboxID === "string" ? raw.inboxID : null,
+                inboxID,
                 raw: JSON.stringify(raw),
               },
             );

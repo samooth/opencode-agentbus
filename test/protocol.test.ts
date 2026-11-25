@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ANTI_POLLING_RULE, envelope, isBusMessage, makeId, parseHeader } from "../src/protocol.ts";
+import {
+  ANTI_POLLING_RULE,
+  envelope,
+  isBusMessage,
+  makeId,
+  parseHeader,
+  sortAuditEntries,
+} from "../src/protocol.ts";
 
 test("envelope lleva FROM/TO/TYPE/ID y firma", () => {
   const msg = envelope({
@@ -55,4 +62,17 @@ test("texto normal no se confunde con mensaje del bus", () => {
 test("la regla anti-polling prohíbe bucles de monitorización", () => {
   assert.match(ANTI_POLLING_RULE, /NO hagas polling/i);
   assert.match(ANTI_POLLING_RULE, /monitorización/i);
+});
+
+test("la auditoría se ordena por fecha y respeta el límite", () => {
+  const entries = [
+    { key: "a", value: { at: "2026-01-01T00:00:00Z" } },
+    { key: "b", value: { at: "2026-03-01T00:00:00Z" } },
+    { key: "c", value: { at: "2026-02-01T00:00:00Z" } },
+  ];
+  assert.deepEqual(
+    sortAuditEntries(entries, 2).map((e) => e.key),
+    ["b", "c"],
+  );
+  assert.equal(sortAuditEntries(entries, 999).length, 3);
 });

@@ -55,9 +55,10 @@ Si no pasas `aliases`, regístralos en caliente con `bus_alias`. Para obtener lo
 |---|---|
 | `bus_send` | Enviar mensaje con sobre; `steer: true` solo para correcciones/alertas |
 | `bus_read` | Leer mensajes ya entregados en una sesión (bajo demanda) |
+| `bus_inbox` | Listar mensajes enviados y aún no entregados (bajo demanda, sin polling) |
 | `bus_directory` | Listar alias y sesiones del proyecto |
 | `bus_alias` | Registrar alias → session ID (persistente) |
-| `bus_status` | Healthcheck: activo, alias, contadores y configuración |
+| `bus_status` | Healthcheck: activo, alias, contadores, pendientes y configuración |
 | `bus_audit` | Ver entregas capturadas por el plugin |
 
 También registra el skill `agent-bus` (`autoinvoke: false`, se carga con `@agent-bus`), el comando

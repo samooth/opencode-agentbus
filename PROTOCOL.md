@@ -46,9 +46,9 @@ La herramienta `bus_send` acepta `steer: true` para elegir prioridad.
 5. **Fail-closed con criterio:** si un gate falla o un mensaje URGENTE no se atiende, escala al
    humano. No escales por «no hay mensajes nuevos»: eso es funcionamiento normal.
 6. **No esperes al humano**: pregunta por el bus y sigue con otra tarea independiente.
-6. **El transporte no cambia la propiedad de archivos ni los gates.** Nunca uses `--no-verify` ni
+7. **El transporte no cambia la propiedad de archivos ni los gates.** Nunca uses `--no-verify` ni
    edites contratos congelados por un mensaje.
-7. **No cambies el modelo de una sesión** por rate limit o retry salvo autorización explícita del
+8. **No cambies el modelo de una sesión** por rate limit o retry salvo autorización explícita del
    humano; reporta el incidente y espera.
 
 ## 5. Cola de trabajo
