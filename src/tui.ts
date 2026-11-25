@@ -89,12 +89,6 @@ async function configure(context: any, bus: AnyFn & Record<string, any>): Promis
 export default Plugin.define({
   id: "agentbus.tui",
   setup(context) {
-    const bus = (context.client as any).rpc(AgentBus) as AnyFn & Record<string, any>;
-    context.ui.toast.show({
-      title: "Agent Bus",
-      message: "Asistente disponible: /bus-setup",
-      variant: "info",
-    });
     context.keymap.layer(() => ({
       mode: "global" as const,
       priority: 10,
@@ -105,6 +99,7 @@ export default Plugin.define({
           palette: true,
           slash: { name: "bus-setup" },
           run: async () => {
+            const bus = (context.client as any).rpc(AgentBus) as AnyFn & Record<string, any>;
             await configure(context, bus);
           },
         },
@@ -114,6 +109,7 @@ export default Plugin.define({
           palette: true,
           slash: { name: "bus-audit" },
           run: async () => {
+            const bus = (context.client as any).rpc(AgentBus) as AnyFn & Record<string, any>;
             const audit = await bus.audit({ limit: 8 });
             const lines = audit.entries.map(
               (e: any) => `${e.at || "-"} · ${e.sessionID || "-"} · ${e.inboxID || "-"}`,

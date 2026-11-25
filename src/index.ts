@@ -454,6 +454,36 @@ export default Plugin.define({
             });
           },
         });
+        editor.add({
+          name: "bus-wizard",
+          description: "Guía paso a paso para configurar alias y roles del bus desde la conversación",
+          execute: async ({ sessionID, delivery }) => {
+            const page = await ctx.session.list({
+              directory: ctx.location.directory,
+              limit: 100,
+            });
+            const sessions = (page.data ?? []).map((s) => {
+              const item = s as { id: string; title?: string };
+              return `- \`${item.id}\` · ${item.title ?? "(sin título)"}`;
+            });
+            await ctx.session.prompt({
+              sessionID,
+              text: [
+                "# Asistente de Agent Bus",
+                "",
+                "Elige una sesión de la lista y dime: **alias**, **rol** (`lead`, `dev` o `reviewer`) y el ID de sesión.",
+                "Yo registrar el alias con `bus.alias`. Repite para cada agente y luego usa `/bus-report` para verificar.",
+                "",
+                "## Sesiones del proyecto",
+                ...sessions,
+                "",
+                "## Configuración actual",
+                await reportText("md"),
+              ].join("\n"),
+              delivery,
+            });
+          },
+        });
       });
     }
 
