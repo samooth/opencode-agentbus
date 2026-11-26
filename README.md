@@ -114,15 +114,15 @@ not change file ownership or gates.
 
 ## Named shared buses
 
-A bus is identified by name (for example `alloy`) and can have members from several projects.
+A bus is identified by name (for example `team`) and can have members from several projects.
 Each member connects with an alias and a role:
 
 ```text
-/bus-connect alloy lead lead
+/bus-connect team lead lead
 ```
 
 The tools `bus.connect`, `bus.use` and `bus.buses` are also available. The **active bus** is stored
-per project; bus members are stored globally, so another project can call `bus.use("alloy")` and
+per project; bus members are stored globally, so another project can call `bus.use("team")` and
 talk to the same aliases. Counters and audit stay separated per project. Legacy entries without a
 prefix remain historical and are not migrated automatically.
 
