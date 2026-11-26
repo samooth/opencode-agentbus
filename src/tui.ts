@@ -14,6 +14,19 @@ const describe = (error: unknown): string => {
   }
 };
 
+/** El RPC está registrado por ubicación: sin `location` cae en el directorio por
+ * defecto del servidor y responde `rpc.unavailable`. */
+const busFor = (context: any): BusClient => {
+  const raw = context.client.rpc(AgentBus);
+  const options = { location: context.location ?? context.data?.location?.default?.() };
+  return {
+    overview: (input: unknown = {}) => raw.overview(input as never, options),
+    setAlias: (input: unknown) => raw.setAlias(input as never, options),
+    audit: (input: unknown) => raw.audit(input as never, options),
+    report: (input: unknown) => raw.report(input as never, options),
+  } as unknown as BusClient;
+};
+
 async function configure(context: any, bus: BusClient): Promise<void> {
   while (true) {
     const overview = await bus.overview();
@@ -109,7 +122,7 @@ export default Plugin.define({
           slash: { name: "bus-setup" },
           run: async () => {
             try {
-              const bus = context.client.rpc(AgentBus) as unknown as BusClient;
+              const bus = busFor(context);
               await configure(context, bus);
             } catch (error) {
               await context.ui.dialog.alert({
@@ -126,7 +139,7 @@ export default Plugin.define({
           slash: { name: "bus-audit" },
           run: async () => {
             try {
-              const bus = context.client.rpc(AgentBus) as unknown as BusClient;
+              const bus = busFor(context);
               const audit = await bus.audit({ limit: 8 });
               const lines = audit.entries.map(
                 (e: any) => `${e.at || "-"} · ${e.sessionID || "-"} · ${e.inboxID || "-"}`,
