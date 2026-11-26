@@ -58,11 +58,26 @@ export default Plugin.define({
     const options = { ...DEFAULTS, ...asOptions(ctx.options) };
     const projectKey = ctx.location.directory.replace(/[^A-Za-z0-9]/g, "_").slice(-80) || "root";
     const sk = (key: string): string => `${projectKey}/${key}`;
+    const gk = (key: string): string => `bus/${key}`;
     const stored = (await ctx.storage.get(sk("aliases"))) as Record<string, string> | undefined;
     let aliases: Record<string, string> = { ...(stored ?? {}), ...(options.aliases ?? {}) };
     const storedRoles = (await ctx.storage.get(sk("roles"))) as Record<string, string> | undefined;
     let roles: Record<string, string> = { ...(storedRoles ?? {}) };
+    const storedBus = (await ctx.storage.get(sk("currentBus"))) as string | undefined;
+    let currentBus = storedBus ?? "default";
     const pending = new Map<string, PendingMessage>();
+
+    type Member = { sessionID: string; role: string };
+    const readMembers = async (name: string): Promise<Record<string, Member>> =>
+      ((await ctx.storage.get(gk(`buses/${name}`))) as Record<string, Member> | undefined) ?? {};
+    const loadBus = async (name: string): Promise<void> => {
+      const members = await readMembers(name);
+      aliases = Object.fromEntries(Object.entries(members).map(([a, m]) => [a, m.sessionID]));
+      roles = Object.fromEntries(Object.entries(members).map(([a, m]) => [a, m.role]));
+      currentBus = name;
+      await ctx.storage.set(sk("currentBus"), name);
+    };
+    if (storedBus) await loadBus(storedBus);
 
     const read = async (key: string): Promise<number> => {
       const value = await ctx.storage.get(sk(key));
@@ -89,6 +104,7 @@ export default Plugin.define({
     const reportText = async (format: "md" | "json"): Promise<string> => {
       const data = {
         project: ctx.location.directory,
+        currentBus,
         schemaHash: "agentbus-0.1.0",
         aliases: Object.entries(aliases).map(([alias, id]) => ({
           alias,
@@ -108,6 +124,7 @@ export default Plugin.define({
         "# Informe de Agent Bus",
         "",
         `Proyecto: \`${data.project}\``,
+        `Bus activo: **${data.currentBus}**`,
         "",
         "## Alias y roles",
         ...data.aliases.map((a) => `- **${a.alias}** (${a.role}) → \`${a.sessionID}\``),
@@ -331,6 +348,81 @@ export default Plugin.define({
       });
 
       editor.add({
+        name: "connect",
+        description: "Conecta una sesión a un bus con nombre compartido, con alias y rol",
+        input: {
+          type: "object",
+          properties: {
+            bus: { type: "string", description: "Nombre del bus (ej. alloy)" },
+            alias: { type: "string" },
+            role: { type: "string", description: "lead | dev | reviewer" },
+            sessionID: { type: "string", description: "Default: la sesión que llama" },
+          },
+          required: ["bus", "alias", "role"],
+          additionalProperties: false,
+        },
+        options: { namespace: options.toolNamespace, codemode: true },
+        execute: async (input, context) => {
+          const args = input as {
+            bus: string;
+            alias: string;
+            role: string;
+            sessionID?: string;
+          };
+          const sessionID = args.sessionID ?? (context as { sessionID?: string }).sessionID;
+          if (!sessionID || !sessionID.startsWith("ses_")) {
+            return {
+              content: "Falta un sessionID válido (ses_...) para conectar al bus",
+              metadata: { error: "invalid_session" },
+            };
+          }
+          const members = await readMembers(args.bus);
+          members[args.alias] = { sessionID, role: args.role };
+          await ctx.storage.set(gk(`buses/${args.bus}`), members);
+          await loadBus(args.bus);
+          return {
+            content: `${args.alias} (${args.role}) conectado al bus '${args.bus}' · ${sessionID}`,
+          };
+        },
+      });
+
+      editor.add({
+        name: "use",
+        description: "Selecciona el bus activo para este proyecto",
+        input: {
+          type: "object",
+          properties: { bus: { type: "string" } },
+          required: ["bus"],
+          additionalProperties: false,
+        },
+        options: { namespace: options.toolNamespace, codemode: true },
+        execute: async (input) => {
+          const bus = (input as { bus: string }).bus;
+          await loadBus(bus);
+          return { content: `bus activo: ${bus} · ${Object.keys(aliases).length} alias` };
+        },
+      });
+
+      editor.add({
+        name: "buses",
+        description: "Lista los buses con nombre y sus miembros",
+        input: { type: "object", properties: {}, additionalProperties: false },
+        options: { namespace: options.toolNamespace, codemode: true },
+        execute: async () => {
+          const page = await ctx.storage.scan({ prefix: gk("buses/"), limit: 100 });
+          if (page.entries.length === 0) return { content: "(sin buses; usa bus_connect)" };
+          const lines = page.entries.map((entry) => {
+            const name = entry.key.slice(gk("buses/").length);
+            const members = entry.value && typeof entry.value === "object"
+              ? Object.keys(entry.value as Record<string, unknown>).length
+              : 0;
+            return `  ${name} · ${members} miembros${name === currentBus ? " · ACTIVO" : ""}`;
+          });
+          return { content: `Buses:\n${lines.join("\n")}` };
+        },
+      });
+
+      editor.add({
         name: "setup",
         description:
           "Registra un alias de la lista mostrada por /bus-wizard: índice, alias y rol",
@@ -391,6 +483,7 @@ export default Plugin.define({
         execute: async () => {
           const lines = [
             "agentbus 0.1.0 — ACTIVO",
+            `bus activo: ${currentBus}`,
             `directorio: ${ctx.location.directory}`,
             `alias (${Object.keys(aliases).length}): ${Object.keys(aliases).join(", ") || "-"}`,
             `delivery por defecto: ${options.defaultDelivery}`,
@@ -490,6 +583,40 @@ export default Plugin.define({
           },
         });
         editor.add({
+          name: "bus-connect",
+          description: "Conecta la sesión actual a un bus con nombre: /bus-connect <bus> <alias> <rol>",
+          execute: async ({ sessionID, prompt, delivery }) => {
+            const text = ((prompt as { text?: string })?.text ?? "").trim();
+            const parts = text.split(/\s+/).filter(Boolean);
+            if (parts.length !== 3) {
+              await ctx.session.prompt({
+                sessionID,
+                text: [
+                  "# Conectar a un bus",
+                  "",
+                  "Escribe: `/bus-connect <nombre-bus> <alias> <rol>`",
+                  "Ejemplo: `/bus-connect alloy lead lead`",
+                  "Roles: `lead`, `dev`, `reviewer`. El bus se comparte entre proyectos.",
+                  "",
+                  `Bus activo: ${currentBus}`,
+                ].join("\n"),
+                delivery,
+              });
+              return;
+            }
+            const [bus, alias, role] = parts;
+            const members = await readMembers(bus);
+            members[alias] = { sessionID, role };
+            await ctx.storage.set(gk(`buses/${bus}`), members);
+            await loadBus(bus);
+            await ctx.session.prompt({
+              sessionID,
+              text: `Conectado al bus '${bus}' como ${alias} (${role}). Alias: ${Object.keys(aliases).join(", ") || "-"}`,
+              delivery,
+            });
+          },
+        });
+        editor.add({
           name: "bus-wizard",
           description: "Guía paso a paso para configurar alias y roles del bus desde la conversación",
           execute: async ({ sessionID, delivery }) => {
@@ -539,6 +666,7 @@ export default Plugin.define({
         });
         return {
           directory: ctx.location.directory,
+          currentBus,
           delivery: options.defaultDelivery,
           self: options.self,
           aliases: Object.entries(aliases).map(([alias, id]) => ({

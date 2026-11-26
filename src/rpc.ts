@@ -44,6 +44,7 @@ export const AgentBus = Rpc.define({
         type: "object",
         properties: {
           directory: { type: "string" },
+          currentBus: { type: "string" },
           delivery: { type: "string" },
           self: { type: "string" },
           aliases: { type: "array", items: aliasSchema },
@@ -60,7 +61,7 @@ export const AgentBus = Rpc.define({
             additionalProperties: false,
           },
         },
-        required: ["directory", "delivery", "self", "aliases", "sessions", "counters"],
+        required: ["directory", "currentBus", "delivery", "self", "aliases", "sessions", "counters"],
         additionalProperties: false,
       },
     },

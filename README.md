@@ -92,12 +92,19 @@ opencode api post '/api/rpc/agentbus/report?location[directory]=/ruta/del/proyec
 Los roles son información para la persona y los clientes; el transporte sigue siendo el sobre del
 protocolo y no cambia la propiedad de archivos ni los gates.
 
-## Un bus por proyecto
+## Buses con nombre compartido
 
-El almacenamiento del plugin está prefijado con el directorio del proyecto, así que los alias,
-roles, contadores y auditoría de dos proyectos distintos no se mezclan. Si el plugin está activo en
-varios proyectos, cada uno tiene su propio bus; el RPC recibe el `location` y usa el prefijo
-correspondiente. Las entradas antiguas sin prefijo quedan como históricas y no se migran automáticamente.
+Un bus se identifica por nombre (por ejemplo `alloy`) y puede tener miembros de varios proyectos.
+Cada miembro se conecta con un alias y un rol:
+
+```text
+/bus-connect alloy lead lead
+```
+
+También están las herramientas `bus.connect`, `bus.use` y `bus.buses`. El **bus activo** se guarda
+por proyecto; los miembros de cada bus se guardan de forma global, así que otro proyecto puede
+`bus.use("alloy")` y hablar con los mismos alias. Contadores y auditoría siguen separados por
+proyecto. Las entradas antiguas sin prefijo quedan como históricas y no se migran automáticamente.
 
 ## Mensaje
 
