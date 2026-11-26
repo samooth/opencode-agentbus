@@ -72,21 +72,26 @@ tu-proyecto/.opencode/plugins/agentbus/   # este repo, con src/index.ts y PROTOC
 | `bus_inbox` | 列出已发送但尚未投递的消息（按需，不轮询） |
 | `bus_directory` | 列出项目中的别名和会话 |
 | `bus_alias` | 注册别名 → session ID（持久化） |
+| `bus_disconnect` | 从当前总线（或指定的 `bus`）断开某个别名 |
 | `bus_status` | 健康检查：当前状态、别名、计数器、待处理项和配置 |
 | `bus_audit` | 查看插件捕获的投递记录 |
+| `bus_connect` | 将会话连接到具名共享总线，指定别名和角色 |
+| `bus_use` | 选择本项目的当前总线 |
+| `bus_buses` | 列出具名总线及其成员 |
+| `bus_setup` | 用 `sessionID`（或缓存索引）、别名和角色注册别名 |
 
-它还会注册 skill `agent-bus`（`autoinvoke: false`，通过 `@agent-bus` 加载）、命令 `/bus-help` 和 `/bus-report`，并且在每个会话的上下文中**只注入一次**规则。不要在项目的 skills 中重复该协议：插件是传输的来源，仓库中的决策文件是协议的来源。
+它还会注册 skill `agent-bus`（`autoinvoke: false`，通过 `@agent-bus` 加载），并且在每个会话的上下文中**只注入一次**规则。唯一的 slash 命令是 `/bus-connect`、`/bus-setup` 和 `/bus-report`。不要在项目的 skills 中重复该协议：插件是传输的来源，仓库中的决策文件是协议的来源。
 
 ## 面向用户的界面
 
-TUI 部分（`./tui`）会在命令面板和 slash commands 中添加两个入口：
+TUI 部分（`./tui`）提供两个对话框式 slash 命令：它们打开模态框，从不向对话写入数据，也不消耗推理。
 
-- **`/bus-setup`** — 引导式助手：列出项目中的会话，允许选择一个、为其指定别名并分配角色（`lead`、`dev` 或 `reviewer`）。按需重复该步骤，并持久化保存别名和角色。
-- **`/bus-audit`** — 显示最近的投递记录，含日期、会话和 `inboxID`，不使用循环或轮询。
+- **`/bus-setup`** — 根会话的编号列表；用户选择会话、别名和角色（`lead`、`dev` 或 `reviewer`）。同一对话框还能查看当前别名、查看完整报告以及断开别名。子 agent 被排除，已连接的会话有标记，顺序稳定。
+- **`/bus-report`** — 完整状态：当前总线、别名/角色、计数器和最近的投递记录。`audit` 只是此报告中「仅投递记录」的子集。
 
-**`/bus-wizard`** 显示项目中会话的编号列表。用户在聊天中输入 `número alias rol`（即“编号 别名 角色”）进行选择（例如 `1 lead lead`）；插件通过 `bus.setup` 注册别名。TUI 可视化助手为可选项：如果安装时未检测到它，此对话流程可提供相同功能。
+`/bus-connect <bus> <alias> <role>` 把当前会话连接到具名共享总线。
 
-在任何会话中，**`/bus-report`** 都会生成一份易读的 Markdown 报告，包含别名、角色、计数器和最近的投递记录。对于外部工具，插件提供了一个 RPC，包含 `overview`、`setAlias`、`audit` 和 `report`：
+对于外部工具，插件提供一个 RPC，包含 `overview`、`setAlias`、`disconnect`、`audit` 和 `report`：
 
 ```bash
 opencode api post '/api/rpc/agentbus/report?location[directory]=/ruta/del/proyecto' \
@@ -149,3 +154,4 @@ npm test
 - **直接用 `node` 导入时出现 `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`** — 入口点按设计是
   TypeScript，符合 OpenCode 插件约定。请从 OpenCode（Bun/tsx）加载插件，不要用 `node` 直接导入。
 - **服务刚启动就出现 `RPC is unavailable: agentbus`** — 插件是异步加载的。稍等片刻后重试。
+- **TUI 中出现 `rpc.unavailable: agentbus`** — RPC 按位置注册。请在项目的 `opencode.json(c)` 中配置插件（而不只是 `cli.json`）并重启。HTTP 查询不带 `location[directory]` 时也会返回 `rpc.unavailable`，这是正常现象。

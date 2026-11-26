@@ -75,34 +75,35 @@ If you do not pass `aliases`, register them at runtime with `bus_alias`. To obta
 | `bus_inbox` | List sent messages not yet delivered (on demand, no polling) |
 | `bus_directory` | List aliases and sessions in the project |
 | `bus_alias` | Register alias → session ID (persistent) |
+| `bus_disconnect` | Disconnect an alias from the active bus (or from `bus` if provided) |
 | `bus_status` | Healthcheck: active, aliases, counters, pending and configuration |
 | `bus_audit` | Show deliveries captured by the plugin |
 | `bus_connect` | Connect a session to a named shared bus with alias and role |
 | `bus_use` | Select the active bus for this project |
 | `bus_buses` | List named buses and their members |
-| `bus_setup` | Register an alias from the numbered wizard list |
+| `bus_setup` | Register an alias from a `sessionID` (or a cached index), alias and role |
 
-The plugin also registers the `agent-bus` skill (`autoinvoke: false`, load it with `@agent-bus`),
-the commands `/bus-help`, `/bus-report`, `/bus-wizard` and `/bus-connect`, and **one** injection of
-the rules into each session's context. Do not duplicate the protocol in project skills: the plugin
-owns transport, and the project's decision file owns the agreements.
+The plugin also registers the `agent-bus` skill (`autoinvoke: false`, load it with `@agent-bus`)
+and **one** injection of the rules into each session's context. The only slash commands are
+`/bus-connect`, `/bus-setup` and `/bus-report`. Do not duplicate the protocol in project skills:
+the plugin owns transport, and the project's decision file owns the agreements.
 
 ## Interface for the human
 
-The TUI part (`./tui`) adds palette entries and slash commands:
+The TUI part (`./tui`) provides two modal slash commands: they open dialogs, never write data into
+the conversation and consume no inference.
 
-- **`/bus-setup`** — guided assistant: lists project sessions, lets the person pick one, give it an
-  alias and assign a role (`lead`, `dev` or `reviewer`). Repeat as needed; aliases and roles persist.
-- **`/bus-audit`** — shows recent deliveries with timestamp, session and `inboxID`, without loops.
+- **`/bus-setup`** — numbered list of root sessions; the person picks a session, alias and role
+  (`lead`, `dev` or `reviewer`). The same modal can view current aliases, show the full report and
+  disconnect an alias. Subagent sessions are excluded, already-connected ones are marked and the
+  order is stable.
+- **`/bus-report`** — full state: active bus, aliases/roles, counters and recent deliveries.
+  `audit` is the deliveries-only subset of this report.
 
-**`/bus-wizard`** prints a numbered list of project sessions. The person chooses by typing
-`number alias role` in the chat (for example `1 lead lead`); the plugin registers the alias with
-`bus.setup`. The visual TUI assistant is optional: if it is not detected in the installation, this
-conversational flow covers the same function.
+`/bus-connect <bus> <alias> <role>` connects the calling session to a named shared bus.
 
-In any session, **`/bus-report`** writes a readable Markdown report with aliases, roles, counters
-and recent deliveries. For external tools, the plugin exposes an RPC with `overview`, `setAlias`,
-`audit` and `report`:
+For external tools, the plugin exposes an RPC with `overview`, `setAlias`, `disconnect`, `audit`
+and `report`:
 
 ```bash
 opencode api post '/api/rpc/agentbus/report?location[directory]=/path/to/project' \
@@ -175,3 +176,4 @@ Requires `@opencode/plugin` 2.4.1. The pending inbox API is not exposed in the p
   not directly with `node`.
 - **`RPC is unavailable: agentbus` right after server startup** — plugins load asynchronously.
   Wait a moment and retry.
+- **`rpc.unavailable: agentbus` in the TUI** — the RPC is registered per location. Configure the plugin in the project's `opencode.json(c)` (not only in `cli.json`) and restart. An HTTP call without `location[directory]` also returns `rpc.unavailable`; that is expected.

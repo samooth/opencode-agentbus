@@ -79,6 +79,31 @@ export default Plugin.define({
     };
     if (storedBus) await loadBus(storedBus);
 
+    const setAliasInBus = async (
+      name: string,
+      alias: string,
+      sessionID: string,
+      role: string,
+    ): Promise<void> => {
+      const members = await readMembers(name);
+      members[alias] = { sessionID, role };
+      await ctx.storage.set(gk(`buses/${name}`), members);
+    };
+
+    const disconnectAlias = async (name: string, alias: string): Promise<void> => {
+      const members = await readMembers(name);
+      delete members[alias];
+      await ctx.storage.set(gk(`buses/${name}`), members);
+      if (name === currentBus) {
+        aliases = { ...aliases };
+        roles = { ...roles };
+        delete aliases[alias];
+        delete roles[alias];
+        await ctx.storage.set(sk("aliases"), aliases);
+        await ctx.storage.set(sk("roles"), roles);
+      }
+    };
+
     const read = async (key: string): Promise<number> => {
       const value = await ctx.storage.get(sk(key));
       return typeof value === "number" ? value : 0;
@@ -139,56 +164,6 @@ export default Plugin.define({
         ...data.audit.map((a) => `- \`${a.at}\` · ${a.sessionID || "-"} · ${a.inboxID || "-"}`),
       ];
       return lines.join("\n");
-    };
-
-    const wizardText = async (): Promise<string> => {
-      const page = await ctx.session.list({
-        directory: ctx.location.directory,
-        limit: 100,
-      });
-      const bySessionID = Object.fromEntries(
-        Object.entries(aliases).map(([alias, id]) => [id, alias]),
-      );
-      const sessions = (page.data ?? [])
-        .filter((s) => !(s as { parentID?: string }).parentID)
-        .map((s) => {
-          const item = s as { id: string; title?: string };
-          return {
-            index: 0,
-            id: item.id,
-            title: item.title ?? "(sin título)",
-          };
-        })
-        .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }))
-        .map((s, i) => ({ ...s, index: i + 1 }));
-      await ctx.storage.set(sk("wizard/sessions"), sessions);
-      return [
-        "# Asistente de Agent Bus",
-        "",
-        "**Tú eliges.** Elige un número de la lista y responde en este mismo chat con:",
-        "",
-        "`número  alias  rol`   (rol = `lead`, `dev` o `reviewer`)",
-        "",
-        "Ejemplo: `1 lead lead`. Repite para cada agente; yo registro los alias con `bus.setup`.",
-        "Cuando termines, usa `/bus-report` para verificar.",
-        "",
-        `Bus activo: **${currentBus}**. Solo sesiones raíz; se excluyen los subagentes.`,
-        "",
-        "## Sesiones del proyecto",
-        ...sessions.map(
-          (s) =>
-            `${s.index}. ${s.title} · \`${s.id}\`${
-              bySessionID[s.id] ? ` · ya conectado como **${bySessionID[s.id]}**` : ""
-            }`,
-        ),
-        "",
-        "## Alias actuales",
-        ...(Object.keys(aliases).length
-          ? Object.entries(aliases).map(
-              ([alias, id]) => `- **${alias}** (${roles[alias] ?? "dev"}) → \`${id}\``,
-            )
-          : ["(sin alias)"]),
-      ].join("\n");
     };
 
     const bump = async (key: string): Promise<number> => {
@@ -391,6 +366,7 @@ export default Plugin.define({
           roles = { ...roles, [args.alias]: args.role ?? "dev" };
           await ctx.storage.set(sk("aliases"), aliases);
           await ctx.storage.set(sk("roles"), roles);
+          await setAliasInBus(currentBus, args.alias, args.sessionID, args.role ?? "dev");
           return {
             content: `alias ${args.alias} (${args.role ?? "dev"}) → ${args.sessionID} guardado`,
           };
@@ -475,37 +451,65 @@ export default Plugin.define({
       editor.add({
         name: "setup",
         description:
-          "Registra un alias de la lista mostrada por /bus-wizard: índice, alias y rol",
+          "Registra un alias con sessionID directo (o con el índice de una lista cacheada), alias y rol",
         input: {
           type: "object",
           properties: {
-            index: { type: "number", description: "Número de la sesión en /bus-wizard" },
+            sessionID: { type: "string", description: "ID de sesión (ses_...)" },
+            index: { type: "number", description: "Alternativa: número de una lista cacheada" },
             alias: { type: "string" },
             role: { type: "string", description: "lead | dev | reviewer" },
           },
-          required: ["index", "alias", "role"],
+          required: ["alias", "role"],
           additionalProperties: false,
         },
         options: { namespace: options.toolNamespace, codemode: true },
         execute: async (input) => {
-          const args = input as { index: number; alias: string; role: string };
-          const cached = (await ctx.storage.get(sk("wizard/sessions"))) as
-            | Array<{ index: number; id: string; title: string }>
-            | undefined;
-          const chosen = cached?.find((s) => s.index === args.index);
-          if (!chosen) {
-            return {
-              content: "Ese número no está en la lista. Ejecuta /bus-wizard para verla.",
-              metadata: { error: "bad_index" },
-            };
+          const args = input as { sessionID?: string; index?: number; alias: string; role: string };
+          let sessionID = args.sessionID;
+          let title = sessionID ?? "";
+          if (!sessionID) {
+            const cached = (await ctx.storage.get(sk("wizard/sessions"))) as
+              | Array<{ index: number; id: string; title: string }>
+              | undefined;
+            const chosen = cached?.find((s) => s.index === args.index);
+            if (!chosen) {
+              return {
+                content: "Falta un sessionID válido o un índice de una lista cacheada.",
+                metadata: { error: "bad_session" },
+              };
+            }
+            sessionID = chosen.id;
+            title = chosen.title;
           }
-          aliases = { ...aliases, [args.alias]: chosen.id };
+          aliases = { ...aliases, [args.alias]: sessionID };
           roles = { ...roles, [args.alias]: args.role };
           await ctx.storage.set(sk("aliases"), aliases);
           await ctx.storage.set(sk("roles"), roles);
           return {
-            content: `${args.alias} (${args.role}) → ${chosen.title} · ${chosen.id} guardado`,
+            content: `${args.alias} (${args.role}) → ${title} · ${sessionID} guardado`,
           };
+        },
+      });
+
+      editor.add({
+        name: "disconnect",
+        description: "Desconecta un alias del bus (por defecto, el activo)",
+        input: {
+          type: "object",
+          properties: {
+            alias: { type: "string" },
+            bus: { type: "string" },
+          },
+          required: ["alias"],
+          additionalProperties: false,
+        },
+        options: { namespace: options.toolNamespace, codemode: true },
+        execute: async (input) => {
+          const args = input as { alias: string; bus?: string };
+          const name = args.bus ?? currentBus;
+          await disconnectAlias(name, args.alias);
+          return { content: `${args.alias} desconectado del bus '${name}'` };
         },
       });
 
@@ -611,28 +615,6 @@ export default Plugin.define({
     if (options.registerCommands) {
       await ctx.command.transform((editor) => {
         editor.add({
-          name: "bus-help",
-          description: "Muestra el protocolo del bus de agentes",
-          execute: async ({ sessionID, delivery }) => {
-            await ctx.session.prompt({
-              sessionID,
-              text: `Protocolo del bus de agentes:\n\n${RULES}`,
-              delivery,
-            });
-          },
-        });
-        editor.add({
-          name: "bus-report",
-          description: "Escribe en la sesión un informe legible de aliases, contadores y auditoría",
-          execute: async ({ sessionID, delivery }) => {
-            await ctx.session.prompt({
-              sessionID,
-              text: await reportText("md"),
-              delivery,
-            });
-          },
-        });
-        editor.add({
           name: "bus-connect",
           description: "Conecta la sesión actual a un bus con nombre: /bus-connect <bus> <alias> <rol>",
           execute: async ({ sessionID, prompt, delivery }) => {
@@ -664,13 +646,6 @@ export default Plugin.define({
               text: `Conectado al bus '${bus}' como ${alias} (${role}). Alias: ${Object.keys(aliases).join(", ") || "-"}`,
               delivery,
             });
-          },
-        });
-        editor.add({
-          name: "bus-wizard",
-          description: "Guía paso a paso para configurar alias y roles del bus desde la conversación",
-          execute: async ({ sessionID, delivery }) => {
-            await ctx.session.prompt({ sessionID, text: await wizardText(), delivery });
           },
         });
       });
@@ -713,6 +688,14 @@ export default Plugin.define({
         roles = { ...roles, [args.alias]: args.role || "dev" };
         await ctx.storage.set(sk("aliases"), aliases);
         await ctx.storage.set(sk("roles"), roles);
+        await setAliasInBus(currentBus, args.alias, args.sessionID, args.role || "dev");
+        await rpcRegistration.events.emit("changed", { kind: "alias" });
+        return { ok: true };
+      },
+      disconnect: async (input) => {
+        const args = input as { alias: string; bus?: string };
+        if (!args.alias) throw new Error("Falta el alias");
+        await disconnectAlias(args.bus ?? currentBus, args.alias);
         await rpcRegistration.events.emit("changed", { kind: "alias" });
         return { ok: true };
       },

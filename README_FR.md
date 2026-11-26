@@ -72,21 +72,36 @@ Si vous ne transmettez pas `aliases`, enregistrez-les à chaud avec `bus_alias`.
 | `bus_inbox` | Lister les messages envoyés et pas encore livrés (à la demande, sans polling) |
 | `bus_directory` | Lister les alias et les sessions du projet |
 | `bus_alias` | Enregistrer alias → session ID (persistant) |
+| `bus_disconnect` | Déconnecter un alias du bus actif (ou du bus indiqué dans `bus`) |
 | `bus_status` | Healthcheck : actif, alias, compteurs, messages en attente et configuration |
 | `bus_audit` | Voir les livraisons capturées par le plugin |
+| `bus_connect` | Connecter une session à un bus nommé avec alias et rôle |
+| `bus_use` | Sélectionner le bus actif de ce projet |
+| `bus_buses` | Lister les buses nommés et leurs membres |
+| `bus_setup` | Enregistrer un alias depuis un `sessionID` (ou un index en cache), alias et rôle |
 
-Il enregistre également le skill `agent-bus` (`autoinvoke: false`, chargé avec `@agent-bus`), les commandes `/bus-help` et `/bus-report`, et **une seule** injection de règles dans le contexte de chaque session. Ne dupliquez pas le protocole dans les skills du projet : le plugin est la source du transport et le fichier de décisions du repo est la source des accords.
+Il enregistre également le skill `agent-bus` (`autoinvoke: false`, chargé avec `@agent-bus`) et
+**une seule** injection de règles dans le contexte de chaque session. Les seules commandes slash sont
+`/bus-connect`, `/bus-setup` et `/bus-report`. Ne dupliquez pas le protocole dans les skills du
+projet : le plugin est la source du transport et le fichier de décisions du repo est la source des
+accords.
 
 ## Interface pour l'humain
 
-La partie TUI (`./tui`) ajoute deux entrées dans la palette et comme slash commands :
+La partie TUI (`./tui`) fournit deux commandes slash en dialogue : elles ouvrent des modales,
+n'écrivent jamais dans la conversation et ne consomment pas d'inférence.
 
-- **`/bus-setup`** — assistant guidé : liste les sessions du projet, permet d'en choisir une, de lui donner un alias et d'assigner un rôle (`lead`, `dev` ou `reviewer`). Répétez l'étape autant de fois que nécessaire et enregistrez les alias et les rôles de façon persistante.
-- **`/bus-audit`** — affiche les dernières livraisons avec date, session et `inboxID`, sans boucles ni sondage.
+- **`/bus-setup`** — liste numérotée des sessions racines ; la personne choisit une session, un alias
+  et un rôle (`lead`, `dev` ou `reviewer`). Le même dialogue permet de voir les alias actuels,
+  afficher le rapport complet et déconnecter un alias. Les sous-agents sont exclus, les sessions déjà
+  connectées sont marquées et l'ordre est stable.
+- **`/bus-report`** — état complet : bus actif, alias/rôles, compteurs et livraisons récentes.
+  `audit` en est le sous-ensemble « livraisons seulement ».
 
-**`/bus-wizard`** affiche la liste numérotée des sessions du projet. L'humain choisit en écrivant dans le chat `número alias rol` (par exemple `1 lead lead`) ; le plugin enregistre l'alias avec `bus.setup`. L'assistant visuel TUI reste optionnel : s'il n'est pas détecté lors de l'installation, ce flux conversationnel remplit la même fonction.
+`/bus-connect <bus> <alias> <rôle>` connecte la session appelante à un bus nommé partagé.
 
-Dans toute session, **`/bus-report`** écrit un rapport Markdown lisible avec alias, rôles, compteurs et livraisons récentes. Pour les outils externes, le plugin expose un RPC avec `overview`, `setAlias`, `audit` et `report` :
+Pour les outils externes, le plugin expose un RPC avec `overview`, `setAlias`, `disconnect`, `audit`
+et `report` :
 
 ```bash
 opencode api post '/api/rpc/agentbus/report?location[directory]=/ruta/del/proyecto' \
@@ -151,3 +166,4 @@ Nécessite `@opencode/plugin` 2.4.1. L'API de la boîte de réception en attente
   le plugin depuis OpenCode (Bun/tsx), pas directement avec `node`.
 - **`RPC is unavailable: agentbus` juste après le démarrage du serveur** — les plugins se chargent
   de façon asynchrone. Patientez un instant et réessayez.
+- **`rpc.unavailable: agentbus` dans la TUI** — le RPC est enregistré par emplacement. Configurez le plugin dans le `opencode.json(c)` du projet (pas seulement dans `cli.json`) et redémarrez. Une requête HTTP sans `location[directory]` renvoie aussi `rpc.unavailable` : c'est normal.

@@ -83,6 +83,23 @@ export const AgentBus = Rpc.define({
         additionalProperties: false,
       },
     },
+    disconnect: {
+      input: {
+        type: "object",
+        properties: {
+          bus: { type: "string" },
+          alias: { type: "string" },
+        },
+        required: ["alias"],
+        additionalProperties: false,
+      },
+      output: {
+        type: "object",
+        properties: { ok: { type: "boolean" } },
+        required: ["ok"],
+        additionalProperties: false,
+      },
+    },
     audit: {
       input: {
         type: "object",

@@ -75,31 +75,35 @@ Si no pasas `aliases`, regístralos en caliente con `bus_alias`. Para obtener lo
 | `bus_inbox` | Listar mensajes enviados y aún no entregados (bajo demanda, sin polling) |
 | `bus_directory` | Listar alias y sesiones del proyecto |
 | `bus_alias` | Registrar alias → session ID (persistente) |
+| `bus_disconnect` | Desconectar un alias del bus activo (o del bus indicado en `bus`) |
 | `bus_status` | Healthcheck: activo, alias, contadores, pendientes y configuración |
 | `bus_audit` | Ver entregas capturadas por el plugin |
+| `bus_connect` | Conectar una sesión a un bus con nombre, con alias y rol |
+| `bus_use` | Seleccionar el bus activo de este proyecto |
+| `bus_buses` | Listar los buses con nombre y sus miembros |
+| `bus_setup` | Registrar un alias desde un `sessionID` (o un índice cacheado), alias y rol |
 
-También registra el skill `agent-bus` (`autoinvoke: false`, se carga con `@agent-bus`), los comandos
-`/bus-help` y `/bus-report`, y **una sola** inyección de reglas en el contexto de cada sesión. No
-dupliques el protocolo en los skills del proyecto: el plugin es la fuente de transporte y el archivo
-de decisiones del repo es la fuente de los acuerdos.
+También registra el skill `agent-bus` (`autoinvoke: false`, se carga con `@agent-bus`) y **una sola**
+inyección de reglas en el contexto de cada sesión. Los únicos slash commands son `/bus-connect`,
+`/bus-setup` y `/bus-report`. No dupliques el protocolo en los skills del proyecto: el plugin es la
+fuente de transporte y el archivo de decisiones del repo es la fuente de los acuerdos.
 
 ## Interfaz para la persona
 
-La parte TUI (`./tui`) añade dos entradas en la paleta y como slash commands:
+La parte TUI (`./tui`) ofrece dos slash commands en diálogo: abren modales, nunca escriben datos en
+la conversación y no consumen inferencia.
 
-- **`/bus-setup`** — asistente guiado: lista las sesiones del proyecto, permite elegir una, darle un
-  alias y asignar un rol (`lead`, `dev` o `reviewer`). Repite el paso las veces que haga falta y
-  guarda los alias y roles de forma persistente.
-- **`/bus-audit`** — muestra las últimas entregas con fecha, sesión e `inboxID`, sin bucles ni sondeo.
+- **`/bus-setup`** — lista numerada de sesiones raíz; la persona elige sesión, alias y rol (`lead`,
+  `dev` o `reviewer`). El mismo diálogo permite ver los alias actuales, ver el informe completo y
+  desconectar un alias. Se excluyen los subagentes, se marcan las sesiones ya conectadas y el orden
+  es estable.
+- **`/bus-report`** — estado completo: bus activo, alias/roles, contadores y entregas recientes.
+  `audit` es el subconjunto de entregas de este informe.
 
-**`/bus-wizard`** muestra la lista numerada de sesiones del proyecto. La persona elige escribiendo
-en el chat `número alias rol` (por ejemplo `1 lead lead`); el plugin registra el alias con
-`bus.setup`. El asistente visual TUI queda como opcional: si no se detecta en la instalación, este
-flujo conversacional cubre la misma función.
+`/bus-connect <bus> <alias> <rol>` conecta la sesión que llama a un bus con nombre compartido.
 
-En cualquier sesión, **`/bus-report`** escribe un informe Markdown legible con alias, roles,
-contadores y entregas recientes. Para herramientas externas, el plugin expone un RPC con
-`overview`, `setAlias`, `audit` y `report`:
+Para herramientas externas, el plugin expone un RPC con `overview`, `setAlias`, `disconnect`, `audit`
+y `report`:
 
 ```bash
 opencode api post '/api/rpc/agentbus/report?location[directory]=/ruta/del/proyecto' \
@@ -172,3 +176,4 @@ plugin: `bus_read` lee la transcripción (mensajes entregados); para vaciar el b
   desde OpenCode (Bun/tsx), no con `node`.
 - **`RPC is unavailable: agentbus` justo después de arrancar el servidor** — los plugins cargan de
   forma asíncrona. Espera un momento y repite.
+- **`rpc.unavailable: agentbus` en la TUI** — el RPC se registra por ubicación. Configura el plugin en el `opencode.json(c)` del proyecto (no solo en `cli.json`) y reinicia. Una consulta HTTP sin `location[directory]` también devuelve `rpc.unavailable`; es normal.

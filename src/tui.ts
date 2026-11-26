@@ -22,6 +22,7 @@ const busFor = (context: any): BusClient => {
   return {
     overview: (input: unknown = {}) => raw.overview(input as never, options),
     setAlias: (input: unknown) => raw.setAlias(input as never, options),
+    disconnect: (input: unknown) => raw.disconnect(input as never, options),
     audit: (input: unknown) => raw.audit(input as never, options),
     report: (input: unknown) => raw.report(input as never, options),
   } as unknown as BusClient;
@@ -39,7 +40,8 @@ async function configure(context: any, bus: BusClient): Promise<void> {
           description: "Elige una sesión real y asígnale alias y rol",
         },
         { title: "Ver alias y roles", value: "view" },
-        { title: "Ver auditoría reciente", value: "audit" },
+        { title: "Ver informe del bus", value: "report" },
+        { title: "Quitar una sesión del bus", value: "remove" },
         { title: "Terminar", value: "done" },
       ],
     });
@@ -54,15 +56,24 @@ async function configure(context: any, bus: BusClient): Promise<void> {
       });
       continue;
     }
-    if (choice === "audit") {
-      const audit = await bus.audit({ limit: 8 });
-      const lines = audit.entries.map(
-        (e: any) => `${e.at || "-"} · ${e.sessionID || "-"} · ${e.inboxID || "-"}`,
-      );
-      await context.ui.dialog.alert({
-        title: "Agent Bus · últimas entregas",
-        message: lines.length ? lines.join("\n") : "Sin entregas registradas todavía.",
+    if (choice === "report") {
+      const report = await bus.report({ format: "md" });
+      await context.ui.dialog.alert({ title: "Agent Bus · informe", message: report.text });
+      continue;
+    }
+    if (choice === "remove") {
+      const names = overview.aliases.map((a: any) => a.alias as string);
+      if (names.length === 0) {
+        await context.ui.dialog.alert({ title: "Agent Bus", message: "No hay alias conectados." });
+        continue;
+      }
+      const alias = await context.ui.dialog.select({
+        title: "Alias a desconectar",
+        options: names.map((name: string) => ({ title: name, value: name })),
       });
+      if (!alias) continue;
+      await bus.disconnect({ alias });
+      context.ui.toast.show({ title: "Agent Bus", message: `${alias} desconectado`, variant: "success" });
       continue;
     }
     const sessions = overview.sessions as Array<{ id: string; title: string }>;
@@ -133,21 +144,15 @@ export default Plugin.define({
           },
         },
         {
-          id: "agentbus.audit",
-          title: "Agent Bus: ver auditoría reciente",
+          id: "agentbus.report",
+          title: "Agent Bus: ver informe (alias, contadores, entregas)",
           palette: true,
-          slash: { name: "bus-audit" },
+          slash: { name: "bus-report" },
           run: async () => {
             try {
               const bus = busFor(context);
-              const audit = await bus.audit({ limit: 8 });
-              const lines = audit.entries.map(
-                (e: any) => `${e.at || "-"} · ${e.sessionID || "-"} · ${e.inboxID || "-"}`,
-              );
-              await context.ui.dialog.alert({
-                title: "Agent Bus · últimas entregas",
-                message: lines.length ? lines.join("\n") : "Sin entregas registradas todavía.",
-              });
+              const report = await bus.report({ format: "md" });
+              await context.ui.dialog.alert({ title: "Agent Bus · informe", message: report.text });
             } catch (error) {
               await context.ui.dialog.alert({
                 title: "Agent Bus · error",
