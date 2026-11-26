@@ -11,7 +11,9 @@ import {
 
 interface PendingMessage {
   id: string;
+  from: string;
   to: string;
+  type: string;
   subject: string;
   inboxID?: string;
   at: string;
@@ -110,8 +112,21 @@ export default Plugin.define({
     };
 
     const auditEntries = async (limit: number) => {
-      const page = await ctx.storage.scan({ prefix: sk("delivered/"), limit: 200 });
-      return sortAuditEntries(page.entries, limit).map((entry) => {
+      // `scan` no soporta orden inverso: paginamos hasta el final para no quedarnos
+      // solo con las entradas más antiguas cuando hay más de 200 entregas.
+      const entries: Array<{ key: string; value: unknown }> = [];
+      let after: string | undefined;
+      for (let pageNo = 0; pageNo < 50; pageNo += 1) {
+        const page = await ctx.storage.scan({
+          prefix: sk("delivered/"),
+          after,
+          limit: 200,
+        });
+        entries.push(...page.entries);
+        if (!page.next) break;
+        after = page.next;
+      }
+      return sortAuditEntries(entries, limit).map((entry) => {
         const value =
           entry.value && typeof entry.value === "object"
             ? (entry.value as Record<string, unknown>)
@@ -121,6 +136,10 @@ export default Plugin.define({
           at: typeof value.at === "string" ? value.at : "",
           sessionID: typeof value.sessionID === "string" ? value.sessionID : "",
           inboxID: typeof value.inboxID === "string" ? value.inboxID : "",
+          id: typeof value.id === "string" ? value.id : "",
+          from: typeof value.from === "string" ? value.from : "",
+          to: typeof value.to === "string" ? value.to : "",
+          type: typeof value.type === "string" ? value.type : "",
           subject: typeof value.subject === "string" ? value.subject : "",
         };
       });
@@ -161,7 +180,10 @@ export default Plugin.define({
         `- pendientes: ${data.counters.pending}`,
         "",
         "## Últimas entregas",
-        ...data.audit.map((a) => `- \`${a.at}\` · ${a.sessionID || "-"} · ${a.inboxID || "-"}`),
+        ...data.audit.map(
+          (a) =>
+            `- \`${a.at}\` · ${a.from || "?"} → ${a.to || a.sessionID || "?"} · ${a.type || "INFO"} · ${a.subject || "(sin asunto)"} · \`${a.id || "-"}\``,
+        ),
       ];
       return lines.join("\n");
     };
@@ -183,6 +205,9 @@ export default Plugin.define({
       if (isSessionID(target)) return target;
       return aliases[target];
     };
+
+    const aliasOfSession = (sessionID?: string): string | undefined =>
+      sessionID ? Object.entries(aliases).find(([, id]) => id === sessionID)?.[0] : undefined;
 
     const aliasList = async (): Promise<string> =>
       Object.entries(aliases)
@@ -209,7 +234,7 @@ export default Plugin.define({
             },
             subject: { type: "string" },
             body: { type: "string" },
-            from: { type: "string", description: "Alias del remitente (default: options.self)" },
+            from: { type: "string", description: "Alias del remitente (default: alias de la sesión que llama)" },
             steer: { type: "boolean", description: "Entrega prioritaria (default: false)" },
             replyTo: { type: "string", description: "ID del mensaje respondido" },
             supersedes: { type: "string", description: "ID del mensaje inválido que se anula" },
@@ -218,7 +243,7 @@ export default Plugin.define({
           additionalProperties: false,
         },
         options: { namespace: options.toolNamespace, codemode: true },
-        execute: async (input) => {
+        execute: async (input, context) => {
           const args = input as {
             to: string;
             type: string;
@@ -236,7 +261,10 @@ export default Plugin.define({
               metadata: { error: "unknown_alias" },
             };
           }
-          const from = args.from ?? options.self;
+          // La identidad la da la sesión que llama, no la config global: si no tiene
+          // alias, usamos su sessionID antes que atribuir falsamente el mensaje a lead.
+          const from =
+            args.from ?? aliasOfSession(context.sessionID) ?? context.sessionID ?? options.self;
           const msg = envelope({
             from,
             to: args.to,
@@ -260,13 +288,16 @@ export default Plugin.define({
               ? (admission as { id: string }).id
               : undefined;
           const at = new Date().toISOString();
-          pending.set(inboxID ?? msg.id, {
+          const meta = {
             id: msg.id,
+            from,
             to: args.to,
+            type: args.type,
             subject: args.subject,
-            inboxID,
             at,
-          });
+          };
+          await ctx.storage.set(sk(`meta/${inboxID ?? msg.id}`), meta);
+          pending.set(inboxID ?? msg.id, { ...meta, inboxID });
           await ctx.storage.set(sk(`sent/${msg.id}`), {
             to: args.to,
             from,
@@ -320,10 +351,10 @@ export default Plugin.define({
           additionalProperties: false,
         },
         options: { namespace: options.toolNamespace, codemode: true },
-        execute: async (input) => {
+        execute: async (input, context) => {
           const args = input as { who?: string; limit?: number };
-          const target = args.who ?? options.self;
-          const sessionID = resolve(target) ?? sessionIDOfCurrentSession(ctx);
+          const target = args.who ?? aliasOfSession(context.sessionID) ?? "self";
+          const sessionID = resolve(target) ?? context.sessionID;
           if (!sessionID) return { content: `No se pudo resolver la sesión de ${target}` };
           const messages = await ctx.session.context({ sessionID });
           const headers: string[] = [];
@@ -568,7 +599,10 @@ export default Plugin.define({
           return {
             content: entries.length
               ? entries
-                  .map((e) => `${e.at} · sesión ${e.sessionID || "-"} · inbox ${e.inboxID || "-"}`)
+                  .map(
+                    (e) =>
+                      `${e.at} · ${e.from || "?"} → ${e.to || e.sessionID || "?"} · ${e.type || "INFO"} · ${e.subject || "(sin asunto)"} · ${e.id || "-"}`,
+                  )
                   .join("\n")
               : "(sin entregas registradas)",
           };
@@ -724,18 +758,28 @@ export default Plugin.define({
         })) {
           try {
             const raw = event as unknown as Record<string, unknown>;
-            const inboxID = typeof raw.inboxID === "string" ? raw.inboxID : null;
+            // Los campos del evento viven en `data`, no en la raíz.
+            const data = (raw.data ?? {}) as Record<string, unknown>;
+            const inboxID = typeof data.inboxID === "string" ? data.inboxID : null;
+            const target = typeof data.sessionID === "string" ? data.sessionID : null;
             if (event.type === "session.inbox.delivered" || event.type === "session.inbox.cancelled") {
               if (inboxID) pending.delete(inboxID);
             }
             if (event.type !== "session.inbox.delivered") continue;
+            const meta = inboxID
+              ? ((await ctx.storage.get(sk(`meta/${inboxID}`))) as Record<string, unknown> | undefined)
+              : undefined;
             await ctx.storage.set(
               sk(`delivered/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
               {
                 at: new Date().toISOString(),
-                sessionID: typeof raw.sessionID === "string" ? raw.sessionID : null,
+                sessionID: target,
                 inboxID,
-                raw: JSON.stringify(raw),
+                id: typeof meta?.id === "string" ? meta.id : "",
+                from: typeof meta?.from === "string" ? meta.from : "",
+                to: typeof meta?.to === "string" ? meta.to : "",
+                type: typeof meta?.type === "string" ? meta.type : "",
+                subject: typeof meta?.subject === "string" ? meta.subject : "",
               },
             );
             await bump("stats/delivered");
@@ -753,9 +797,4 @@ export default Plugin.define({
   },
 });
 
-function sessionIDOfCurrentSession(_ctx: unknown): string | undefined {
-  // El SDK no expone la sesión actual en el contexto del plugin; el caller debe
-  // pasar `who` o configurar un alias propio. Se mantiene esta función para
-  // hacer explícita la limitación.
-  return undefined;
-}
+

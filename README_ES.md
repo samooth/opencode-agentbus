@@ -90,6 +90,8 @@ fuente de transporte y el archivo de decisiones del repo es la fuente de los acu
 
 ## Interfaz para la persona
 
+**Remitente:** se resuelve desde el alias de la sesión que llama (o su `sessionID` si no tiene alias); nunca se atribuye silenciosamente al `self` configurado. Cada entrada de auditoría registra `from`, `to`, `type`, `subject`, `id` y fecha.
+
 La parte TUI (`./tui`) ofrece dos slash commands en diálogo: abren modales, nunca escriben datos en
 la conversación y no consumen inferencia.
 

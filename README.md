@@ -90,6 +90,8 @@ the plugin owns transport, and the project's decision file owns the agreements.
 
 ## Interface for the human
 
+**Sender:** resolved from the calling session's alias (or its `sessionID` if it has no alias); it is never silently attributed to the configured `self`. Each audit entry records `from`, `to`, `type`, `subject`, `id` and timestamp.
+
 The TUI part (`./tui`) provides two modal slash commands: they open dialogs, never write data into
 the conversation and consume no inference.
 

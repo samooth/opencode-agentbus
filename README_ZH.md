@@ -84,6 +84,8 @@ tu-proyecto/.opencode/plugins/agentbus/   # este repo, con src/index.ts y PROTOC
 
 ## 面向用户的界面
 
+**发送者：** 自动从调用会话的别名解析（没有别名则用其 `sessionID`），不会静默归到配置的 `self`。每条审计记录包含 `from`、`to`、`type`、`subject`、`id` 和时间戳。
+
 TUI 部分（`./tui`）提供两个对话框式 slash 命令：它们打开模态框，从不向对话写入数据，也不消耗推理。
 
 - **`/bus-setup`** — 根会话的编号列表；用户选择会话、别名和角色（`lead`、`dev` 或 `reviewer`）。同一对话框还能查看当前别名、查看完整报告以及断开别名。子 agent 被排除，已连接的会话有标记，顺序稳定。

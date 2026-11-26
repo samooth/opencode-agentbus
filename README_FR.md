@@ -88,6 +88,8 @@ accords.
 
 ## Interface pour l'humain
 
+**Expéditeur :** résolu depuis l'alias de la session appelante (ou son `sessionID` si elle n'a pas d'alias) ; il n'est jamais attribué silencieusement au `self` configuré. Chaque entrée d'audit enregistre `from`, `to`, `type`, `subject`, `id` et l'horodatage.
+
 La partie TUI (`./tui`) fournit deux commandes slash en dialogue : elles ouvrent des modales,
 n'écrivent jamais dans la conversation et ne consomment pas d'inférence.
 
