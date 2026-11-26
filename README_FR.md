@@ -4,7 +4,7 @@
 
 # opencode-agentbus
 
-Protocole **portable** de communication entre sessions d'OpenCode V2. Issu du flux réel que nous utilisons dans Alloy : plusieurs agents travaillent en parallèle et s'écrivent via l'API sans que l'humain fasse le facteur. Pas de polling, pas de boucles de surveillance : le prompt injecté réveille la session.
+Protocole **portable** de communication entre sessions d'OpenCode V2. Issu d'un flux de travail réel : plusieurs agents travaillent en parallèle et s'écrivent via l'API sans que l'humain fasse le facteur. Pas de polling, pas de boucles de surveillance : le prompt injecté réveille la session.
 
 ## Installer dans n'importe quel projet
 
@@ -97,13 +97,13 @@ Les rôles sont des informations pour l'humain et les clients ; le transport res
 
 ## Bus nommés partagés
 
-Un bus s'identifie par son nom (par exemple `alloy`) et peut avoir des membres issus de plusieurs projets. Chaque membre se connecte avec un alias et un rôle :
+Un bus s'identifie par son nom (par exemple `team`) et peut avoir des membres issus de plusieurs projets. Chaque membre se connecte avec un alias et un rôle :
 
 ```text
-/bus-connect alloy lead lead
+/bus-connect team lead lead
 ```
 
-Les outils `bus.connect`, `bus.use` et `bus.buses` sont également disponibles. Le **bus actif** est enregistré par projet ; les membres de chaque bus sont enregistrés globalement, si bien qu'un autre projet peut `bus.use("alloy")` et communiquer avec les mêmes alias. Les compteurs et l'audit restent séparés par projet. Les anciennes entrées sans préfixe restent historiques et ne sont pas migrées automatiquement.
+Les outils `bus.connect`, `bus.use` et `bus.buses` sont également disponibles. Le **bus actif** est enregistré par projet ; les membres de chaque bus sont enregistrés globalement, si bien qu'un autre projet peut `bus.use("team")` et communiquer avec les mêmes alias. Les compteurs et l'audit restent séparés par projet. Les anciennes entrées sans préfixe restent historiques et ne sont pas migrées automatiquement.
 
 ## Message
 

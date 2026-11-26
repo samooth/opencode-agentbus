@@ -4,7 +4,7 @@
 
 **作者：** Tomás Díaz <tomas@bsv.direct> · 许可证：MIT
 
-OpenCode V2 会话之间**可移植（portable）**的通信协议。源自我们在 Alloy 中使用的真实工作流：多个 agent 并行工作，通过 API 互相发送消息，无需人类充当信使。不使用轮询（polling），也没有监控循环：注入的 prompt 会唤醒会话。
+OpenCode V2 会话之间**可移植（portable）**的通信协议。源自一个真实的工作流：多个 agent 并行工作，通过 API 互相发送消息，无需人类充当信使。不使用轮询（polling），也没有监控循环：注入的 prompt 会唤醒会话。
 
 ## 在任意项目中安装
 
@@ -97,13 +97,13 @@ opencode api post '/api/rpc/agentbus/report?location[directory]=/ruta/del/proyec
 
 ## 共享命名总线
 
-总线通过名称标识（例如 `alloy`），其成员可以来自多个项目。每个成员使用别名和角色连接：
+总线通过名称标识（例如 `team`），其成员可以来自多个项目。每个成员使用别名和角色连接：
 
 ```text
-/bus-connect alloy lead lead
+/bus-connect team lead lead
 ```
 
-还有 `bus.connect`、`bus.use` 和 `bus.buses` 工具。**当前总线**按项目保存；各总线的成员则全局保存，因此其他项目可以执行 `bus.use("alloy")` 并与相同的别名通信。计数器和审计仍按项目分开。旧的无前缀条目保留为历史记录，不会自动迁移。
+还有 `bus.connect`、`bus.use` 和 `bus.buses` 工具。**当前总线**按项目保存；各总线的成员则全局保存，因此其他项目可以执行 `bus.use("team")` 并与相同的别名通信。计数器和审计仍按项目分开。旧的无前缀条目保留为历史记录，不会自动迁移。
 
 ## 消息
 

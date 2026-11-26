@@ -1,7 +1,7 @@
 # opencode-agentbus
 
-A **portable** agent-to-agent messaging protocol for OpenCode V2 sessions. It came out of the real
-workflow we use in Alloy: several agents work in parallel and talk through the API instead of using
+A **portable** agent-to-agent messaging protocol for OpenCode V2 sessions. It came out of a real
+workflow where several agents work in parallel and talk through the API instead of using
 the human as a courier. No polling, no monitoring loops: an injected prompt wakes the target session.
 
 **Languages:** [English](README.md) · [Español](README_ES.md) · [Français](README_FR.md) · [中文](README_ZH.md)
@@ -114,15 +114,15 @@ not change file ownership or gates.
 
 ## Named shared buses
 
-A bus is identified by name (for example `team`) and can have members from several projects.
+A bus is identified by name (for example `my-team`) and can have members from several projects.
 Each member connects with an alias and a role:
 
 ```text
-/bus-connect team lead lead
+/bus-connect my-team lead lead
 ```
 
 The tools `bus.connect`, `bus.use` and `bus.buses` are also available. The **active bus** is stored
-per project; bus members are stored globally, so another project can call `bus.use("team")` and
+per project; bus members are stored globally, so another project can call `bus.use("my-team")` and
 talk to the same aliases. Counters and audit stay separated per project. Legacy entries without a
 prefix remain historical and are not migrated automatically.
 

@@ -1,7 +1,7 @@
 # opencode-agentbus
 
-Protocolo **portable** de comunicación entre sesiones de OpenCode V2. Extraído del flujo real que
-usamos en Alloy: varios agentes trabajan en paralelo y se escriben por API sin que el humano haga
+Protocolo **portable** de comunicación entre sesiones de OpenCode V2. Extraído de un flujo de
+trabajo real: varios agentes trabajan en paralelo y se escriben por API sin que el humano haga
 de cartero. Sin polling, sin bucles de monitorización: el prompt inyectado despierta a la sesión.
 
 **Idiomas:** [English](README.md) · [Español](README_ES.md) · [Français](README_FR.md) · [中文](README_ZH.md)
@@ -111,16 +111,16 @@ protocolo y no cambia la propiedad de archivos ni los gates.
 
 ## Buses con nombre compartido
 
-Un bus se identifica por nombre (por ejemplo `alloy`) y puede tener miembros de varios proyectos.
+Un bus se identifica por nombre (por ejemplo `team`) y puede tener miembros de varios proyectos.
 Cada miembro se conecta con un alias y un rol:
 
 ```text
-/bus-connect alloy lead lead
+/bus-connect team lead lead
 ```
 
 También están las herramientas `bus.connect`, `bus.use` y `bus.buses`. El **bus activo** se guarda
 por proyecto; los miembros de cada bus se guardan de forma global, así que otro proyecto puede
-`bus.use("alloy")` y hablar con los mismos alias. Contadores y auditoría siguen separados por
+`bus.use("team")` y hablar con los mismos alias. Contadores y auditoría siguen separados por
 proyecto. Las entradas antiguas sin prefijo quedan como históricas y no se migran automáticamente.
 
 ## Mensaje

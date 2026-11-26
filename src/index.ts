@@ -353,7 +353,7 @@ export default Plugin.define({
         input: {
           type: "object",
           properties: {
-            bus: { type: "string", description: "Nombre del bus (ej. alloy)" },
+            bus: { type: "string", description: "Nombre del bus (ej. team)" },
             alias: { type: "string" },
             role: { type: "string", description: "lead | dev | reviewer" },
             sessionID: { type: "string", description: "Default: la sesión que llama" },
@@ -595,7 +595,7 @@ export default Plugin.define({
                   "# Conectar a un bus",
                   "",
                   "Escribe: `/bus-connect <nombre-bus> <alias> <rol>`",
-                  "Ejemplo: `/bus-connect alloy lead lead`",
+                  "Ejemplo: `/bus-connect team lead lead`",
                   "Roles: `lead`, `dev`, `reviewer`. El bus se comparte entre proyectos.",
                   "",
                   `Bus activo: ${currentBus}`,
