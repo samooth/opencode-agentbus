@@ -141,6 +141,38 @@ export default Plugin.define({
       return lines.join("\n");
     };
 
+    const wizardText = async (): Promise<string> => {
+      const page = await ctx.session.list({
+        directory: ctx.location.directory,
+        limit: 100,
+      });
+      const sessions = (page.data ?? []).map((s, i) => {
+        const item = s as { id: string; title?: string };
+        return {
+          index: i + 1,
+          id: item.id,
+          title: item.title ?? "(sin título)",
+        };
+      });
+      await ctx.storage.set(sk("wizard/sessions"), sessions);
+      return [
+        "# Asistente de Agent Bus",
+        "",
+        "**Tú eliges.** Elige un número de la lista y responde en este mismo chat con:",
+        "",
+        "`número  alias  rol`   (rol = `lead`, `dev` o `reviewer`)",
+        "",
+        "Ejemplo: `1 lead lead`. Repite para cada agente; yo registro los alias con `bus.setup`.",
+        "Cuando termines, usa `/bus-report` para verificar.",
+        "",
+        "## Sesiones del proyecto",
+        ...sessions.map((s) => `${s.index}. ${s.title} · \`${s.id}\``),
+        "",
+        "## Configuración actual",
+        await reportText("md"),
+      ].join("\n");
+    };
+
     const bump = async (key: string): Promise<number> => {
       const current = (await ctx.storage.get(sk(key))) as number | undefined;
       const next = (typeof current === "number" ? current : 0) + 1;
@@ -583,6 +615,21 @@ export default Plugin.define({
           },
         });
         editor.add({
+          name: "bus-audit",
+          description: "Muestra en la sesión las últimas entregas registradas por el plugin",
+          execute: async ({ sessionID, delivery }) => {
+            const entries = await auditEntries(10);
+            const text = [
+              "# Auditoría de Agent Bus",
+              "",
+              ...(entries.length
+                ? entries.map((e) => `- \`${e.at || "-"}\` · ${e.sessionID || "-"} · ${e.inboxID || "-"}`)
+                : ["(sin entregas registradas)"]),
+            ].join("\n");
+            await ctx.session.prompt({ sessionID, text, delivery });
+          },
+        });
+        editor.add({
           name: "bus-connect",
           description: "Conecta la sesión actual a un bus con nombre: /bus-connect <bus> <alias> <rol>",
           execute: async ({ sessionID, prompt, delivery }) => {
@@ -620,39 +667,14 @@ export default Plugin.define({
           name: "bus-wizard",
           description: "Guía paso a paso para configurar alias y roles del bus desde la conversación",
           execute: async ({ sessionID, delivery }) => {
-            const page = await ctx.session.list({
-              directory: ctx.location.directory,
-              limit: 100,
-            });
-            const sessions = (page.data ?? []).map((s, i) => {
-              const item = s as { id: string; title?: string };
-              return {
-                index: i + 1,
-                id: item.id,
-                title: item.title ?? "(sin título)",
-              };
-            });
-            await ctx.storage.set(sk("wizard/sessions"), sessions);
-            await ctx.session.prompt({
-              sessionID,
-              text: [
-                "# Asistente de Agent Bus",
-                "",
-                "**Tú eliges.** Elige un número de la lista y responde en este mismo chat con:",
-                "",
-                "`número  alias  rol`   (rol = `lead`, `dev` o `reviewer`)",
-                "",
-                "Ejemplo: `1 lead lead`. Repite para cada agente; yo registro los alias con `bus.setup`.",
-                "Cuando termines, usa `/bus-report` para verificar.",
-                "",
-                "## Sesiones del proyecto",
-                ...sessions.map((s) => `${s.index}. ${s.title} · \`${s.id}\``),
-                "",
-                "## Configuración actual",
-                await reportText("md"),
-              ].join("\n"),
-              delivery,
-            });
+            await ctx.session.prompt({ sessionID, text: await wizardText(), delivery });
+          },
+        });
+        editor.add({
+          name: "bus-setup",
+          description: "Asistente para elegir sesiones y asignar alias y roles (alias de /bus-wizard)",
+          execute: async ({ sessionID, delivery }) => {
+            await ctx.session.prompt({ sessionID, text: await wizardText(), delivery });
           },
         });
       });
