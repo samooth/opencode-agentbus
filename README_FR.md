@@ -167,3 +167,7 @@ Nécessite `@opencode/plugin` 2.4.1. L'API de la boîte de réception en attente
 - **`RPC is unavailable: agentbus` juste après le démarrage du serveur** — les plugins se chargent
   de façon asynchrone. Patientez un instant et réessayez.
 - **`rpc.unavailable: agentbus` dans la TUI** — le RPC est enregistré par emplacement. Configurez le plugin dans le `opencode.json(c)` du projet (pas seulement dans `cli.json`) et redémarrez. Une requête HTTP sans `location[directory]` renvoie aussi `rpc.unavailable` : c'est normal.
+
+Le lockfile utilise `overrides` pour épingler `glob` et `minimatch` à des versions corrigées tant que
+`@opencode/util` 2.4.1 demande encore des plages vulnérables. `npm audit` signale 0 vulnérabilité.
+Les overrides s'appliquent à ce dépôt ; les consommateurs npm résolvent leur propre arbre.

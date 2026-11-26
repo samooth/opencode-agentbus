@@ -30,15 +30,19 @@
     "@opencode/plugin": "2.4.1"
   },
   "devDependencies": {
-    "@opentui/core": "^0.6.8",
-    "@opentui/solid": "^0.6.8",
+    "@opentui/core": "^0.9.9",
+    "@opentui/solid": "^0.9.9",
     "solid-js": "^1.9.20",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   },
   "peerDependencies": {
     "solid-js": ">=1.9.0",
-    "@opentui/core": ">=0.6.6",
-    "@opentui/solid": ">=0.6.6"
+    "@opentui/core": ">=0.8.0",
+    "@opentui/solid": ">=0.8.0"
+  },
+  "overrides": {
+    "glob": "^14.0.2",
+    "minimatch": "^11.0.1"
   }
 }

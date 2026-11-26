@@ -155,3 +155,7 @@ npm test
   TypeScript，符合 OpenCode 插件约定。请从 OpenCode（Bun/tsx）加载插件，不要用 `node` 直接导入。
 - **服务刚启动就出现 `RPC is unavailable: agentbus`** — 插件是异步加载的。稍等片刻后重试。
 - **TUI 中出现 `rpc.unavailable: agentbus`** — RPC 按位置注册。请在项目的 `opencode.json(c)` 中配置插件（而不只是 `cli.json`）并重启。HTTP 查询不带 `location[directory]` 时也会返回 `rpc.unavailable`，这是正常现象。
+
+lockfile 使用 `overrides` 将 `glob` 和 `minimatch` 固定到已修复版本，因为 `@opencode/util` 2.4.1
+仍请求存在漏洞的版本范围。`npm audit` 报告 0 个漏洞。overrides 仅对本仓库生效；从 npm 安装的
+用户会自行解析依赖树。

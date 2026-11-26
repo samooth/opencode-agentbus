@@ -177,3 +177,7 @@ plugin: `bus_read` lee la transcripción (mensajes entregados); para vaciar el b
 - **`RPC is unavailable: agentbus` justo después de arrancar el servidor** — los plugins cargan de
   forma asíncrona. Espera un momento y repite.
 - **`rpc.unavailable: agentbus` en la TUI** — el RPC se registra por ubicación. Configura el plugin en el `opencode.json(c)` del proyecto (no solo en `cli.json`) y reinicia. Una consulta HTTP sin `location[directory]` también devuelve `rpc.unavailable`; es normal.
+
+El lockfile usa `overrides` para fijar `glob` y `minimatch` a versiones parcheadas mientras
+`@opencode/util` 2.4.1 sigue pidiendo rangos vulnerables. `npm audit` informa 0 vulnerabilidades.
+Las overrides aplican a este repo; quien instale desde npm resuelve su propio árbol.
