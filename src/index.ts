@@ -482,7 +482,7 @@ export default Plugin.define({
         options: { namespace: options.toolNamespace, codemode: true },
         execute: async () => {
           const lines = [
-            "agentbus 0.1.0 — ACTIVO",
+            "agentbus 0.2.0 — ACTIVO",
             `bus activo: ${currentBus}`,
             `directorio: ${ctx.location.directory}`,
             `alias (${Object.keys(aliases).length}): ${Object.keys(aliases).join(", ") || "-"}`,

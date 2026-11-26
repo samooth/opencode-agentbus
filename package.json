@@ -1,9 +1,10 @@
 {
   "name": "opencode-agentbus",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Portable agent-to-agent messaging protocol for OpenCode V2 sessions",
   "type": "module",
   "license": "MIT",
+  "author": "Tomás Díaz <tomas@bsv.direct>",
   "exports": {
     ".": "./src/index.ts",
     "./rpc": "./src/rpc.ts",
@@ -11,12 +12,19 @@
   },
   "files": [
     "src",
+    "README.md",
+    "README_ES.md",
+    "README_FR.md",
+    "README_ZH.md",
     "PROTOCOL.md",
-    "README.md"
+    "PROTOCOL_ES.md",
+    "PROTOCOL_FR.md",
+    "PROTOCOL_ZH.md"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "prepublishOnly": "npm run typecheck && npm test"
   },
   "dependencies": {
     "@opencode/plugin": "2.4.1"
