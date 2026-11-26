@@ -176,7 +176,7 @@ Requires `@opencode/plugin` 2.4.1. The pending inbox API is not exposed in the p
   not directly with `node`.
 - **`RPC is unavailable: agentbus` right after server startup** — plugins load asynchronously.
   Wait a moment and retry.
-- **`rpc.unavailable: agentbus` in the TUI** — the RPC is registered per location. Configure the plugin in the project's `opencode.json(c)` (not only in `cli.json`) and restart. An HTTP call without `location[directory]` also returns `rpc.unavailable`; that is expected.
+- **`rpc.unavailable: agentbus` in the TUI** — the RPC is registered per location. Add the plugin to `~/.config/opencode/opencode.jsonc` (applies to every project) or to the project's `opencode.json(c)` — `cli.json` only loads the TUI part — and restart. An HTTP call without `location[directory]` also returns `rpc.unavailable`; that is expected.
 
 The lockfile uses `overrides` to pin `glob` and `minimatch` to patched versions while
 `@opencode/util` 2.4.1 still requests vulnerable ranges. `npm audit` reports 0 vulnerabilities.
