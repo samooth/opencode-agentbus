@@ -139,3 +139,13 @@ npm test
 ```
 
 需要 `@opencode/plugin` 2.4.1。待处理收件箱的 API 未在插件 SDK 中暴露：`bus_read` 读取的是转录记录（已投递的消息）；要清空收件箱，请使用 HTTP API `DELETE /api/session/{id}/inbox/{inboxID}`。
+
+
+## 故障排查
+
+- **TUI 部分无法加载（`Cannot find package 'solid-js'`）** — 显式安装 peer 依赖：
+  `npm install solid-js @opentui/core @opentui/solid`。npm 通常会自动安装；只有在使用
+  `legacy-peer-deps=true` 或 npm < 7 时才会出现此问题。
+- **直接用 `node` 导入时出现 `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`** — 入口点按设计是
+  TypeScript，符合 OpenCode 插件约定。请从 OpenCode（Bun/tsx）加载插件，不要用 `node` 直接导入。
+- **服务刚启动就出现 `RPC is unavailable: agentbus`** — 插件是异步加载的。稍等片刻后重试。

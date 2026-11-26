@@ -160,3 +160,15 @@ npm test
 Requiere `@opencode/plugin` 2.4.1. La API del buzón pendiente no está expuesta en el SDK del
 plugin: `bus_read` lee la transcripción (mensajes entregados); para vaciar el buzón usa la API HTTP
 `DELETE /api/session/{id}/inbox/{inboxID}`.
+
+
+## Solución de problemas
+
+- **La parte TUI no carga (`Cannot find package 'solid-js'`)** — instala explícitamente las peer
+  dependencies: `npm install solid-js @opentui/core @opentui/solid`. npm las instala automáticamente
+  de forma normal; esto solo ocurre con `legacy-peer-deps=true` o npm < 7.
+- **`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING` al importar con `node` directamente** — los
+  entrypoints son TypeScript por diseño, según el contrato de plugins de OpenCode. Carga el plugin
+  desde OpenCode (Bun/tsx), no con `node`.
+- **`RPC is unavailable: agentbus` justo después de arrancar el servidor** — los plugins cargan de
+  forma asíncrona. Espera un momento y repite.
