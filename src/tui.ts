@@ -99,8 +99,15 @@ export default Plugin.define({
           palette: true,
           slash: { name: "bus-setup" },
           run: async () => {
-            const bus = (context.client as any).rpc(AgentBus) as AnyFn & Record<string, any>;
-            await configure(context, bus);
+            try {
+              const bus = (context.client as any).rpc(AgentBus) as AnyFn & Record<string, any>;
+              await configure(context, bus);
+            } catch (error) {
+              await context.ui.dialog.alert({
+                title: "Agent Bus · error",
+                message: error instanceof Error ? error.message : String(error),
+              });
+            }
           },
         },
         {
@@ -109,15 +116,22 @@ export default Plugin.define({
           palette: true,
           slash: { name: "bus-audit" },
           run: async () => {
-            const bus = (context.client as any).rpc(AgentBus) as AnyFn & Record<string, any>;
-            const audit = await bus.audit({ limit: 8 });
-            const lines = audit.entries.map(
-              (e: any) => `${e.at || "-"} · ${e.sessionID || "-"} · ${e.inboxID || "-"}`,
-            );
-            await context.ui.dialog.alert({
-              title: "Agent Bus · últimas entregas",
-              message: lines.length ? lines.join("\n") : "Sin entregas registradas todavía.",
-            });
+            try {
+              const bus = (context.client as any).rpc(AgentBus) as AnyFn & Record<string, any>;
+              const audit = await bus.audit({ limit: 8 });
+              const lines = audit.entries.map(
+                (e: any) => `${e.at || "-"} · ${e.sessionID || "-"} · ${e.inboxID || "-"}`,
+              );
+              await context.ui.dialog.alert({
+                title: "Agent Bus · últimas entregas",
+                message: lines.length ? lines.join("\n") : "Sin entregas registradas todavía.",
+              });
+            } catch (error) {
+              await context.ui.dialog.alert({
+                title: "Agent Bus · error",
+                message: error instanceof Error ? error.message : String(error),
+              });
+            }
           },
         },
       ],
