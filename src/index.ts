@@ -146,14 +146,21 @@ export default Plugin.define({
         directory: ctx.location.directory,
         limit: 100,
       });
-      const sessions = (page.data ?? []).map((s, i) => {
-        const item = s as { id: string; title?: string };
-        return {
-          index: i + 1,
-          id: item.id,
-          title: item.title ?? "(sin título)",
-        };
-      });
+      const bySessionID = Object.fromEntries(
+        Object.entries(aliases).map(([alias, id]) => [id, alias]),
+      );
+      const sessions = (page.data ?? [])
+        .filter((s) => !(s as { parentID?: string }).parentID)
+        .map((s) => {
+          const item = s as { id: string; title?: string };
+          return {
+            index: 0,
+            id: item.id,
+            title: item.title ?? "(sin título)",
+          };
+        })
+        .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }))
+        .map((s, i) => ({ ...s, index: i + 1 }));
       await ctx.storage.set(sk("wizard/sessions"), sessions);
       return [
         "# Asistente de Agent Bus",
@@ -165,11 +172,22 @@ export default Plugin.define({
         "Ejemplo: `1 lead lead`. Repite para cada agente; yo registro los alias con `bus.setup`.",
         "Cuando termines, usa `/bus-report` para verificar.",
         "",
-        "## Sesiones del proyecto",
-        ...sessions.map((s) => `${s.index}. ${s.title} · \`${s.id}\``),
+        `Bus activo: **${currentBus}**. Solo sesiones raíz; se excluyen los subagentes.`,
         "",
-        "## Configuración actual",
-        await reportText("md"),
+        "## Sesiones del proyecto",
+        ...sessions.map(
+          (s) =>
+            `${s.index}. ${s.title} · \`${s.id}\`${
+              bySessionID[s.id] ? ` · ya conectado como **${bySessionID[s.id]}**` : ""
+            }`,
+        ),
+        "",
+        "## Alias actuales",
+        ...(Object.keys(aliases).length
+          ? Object.entries(aliases).map(
+              ([alias, id]) => `- **${alias}** (${roles[alias] ?? "dev"}) → \`${id}\``,
+            )
+          : ["(sin alias)"]),
       ].join("\n");
     };
 
